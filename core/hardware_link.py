@@ -1,61 +1,59 @@
-"""hardware_link.py — SM8750 Hardware Interface · SLC v12"""
-import os, glob, time
+#!/usr/bin/env python3
+"""
+core/hardware_link.py — Substrate Sensor Fusion
+Directly polls Snapdragon sysfs for thermal and hardware telemetry.
+"""
+import os
+import numpy as np
+from typing import Optional
 
-_SM8750_PRIORITY = [19,14,17,7,18,15,16,8,9,6,5,4,3,2,1,0]
-
-class HardwareLink:
+class ThermalMonitor:
+    ZONES = [
+        "/sys/class/thermal/thermal_zone0/temp",
+        "/sys/class/thermal/thermal_zone1/temp",
+        "/sys/class/thermal/thermal_zone2/temp",
+        "/sys/class/power_supply/battery/temp",
+    ]
+    
     def __init__(self):
-        self._zone = self._find_zone()
-
-    def _find_zone(self):
-        base = "/sys/class/thermal"
+        self.sim = not self._is_android()
+        self._sim_temp = 35.0
+        self._path = self._find_zone()
+        if self._path:
+            ttype = self._read_type()
+            print(f"[Hardware Link] Bound to substrate: {self._path} ({ttype})")
+        else:
+            print("[Hardware Link] Simulation mode active. No physical sysfs found.")
+    
+    def _is_android(self) -> bool:
+        return ("ANDROID_ROOT" in os.environ or
+                os.path.exists("/system/bin/app_process") or
+                "termux" in os.environ.get("PREFIX", "").lower())
+    
+    def _find_zone(self) -> Optional[str]:
+        for p in self.ZONES:
+            if os.path.exists(p):
+                return p
+        return None
+    
+    def _read_type(self) -> str:
+        tpath = self._path.replace("/temp", "/type")
         try:
-            zones = [int(d.replace("thermal_zone",""))
-                     for d in os.listdir(base) if d.startswith("thermal_zone")]
-        except Exception:
-            return 7
-        ordered = _SM8750_PRIORITY + [z for z in sorted(zones) if z not in _SM8750_PRIORITY]
-        for zone in ordered:
-            try:
-                raw = int(open(f"{base}/thermal_zone{zone}/temp").read().strip())
-                if 20000 <= raw <= 80000:
-                    return zone
-            except Exception:
-                continue
-        return 7
-
-    def get_thermal_zone_0(self):
+            with open(tpath) as f:
+                return f.read().strip()
+        except:
+            return "unknown"
+    
+    def read(self) -> float:
+        """Returns the current hardware temperature in Celsius."""
+        if self.sim or not self._path:
+            self._sim_temp += 0.005 * (1 + 0.1 * np.random.randn())
+            self._sim_temp = max(30.0, min(self._sim_temp, 45.0))
+            return self._sim_temp
         try:
-            raw = int(open(f"/sys/class/thermal/thermal_zone{self._zone}/temp").read().strip())
-            return raw / 1000.0
-        except Exception:
-            return 35.0
-
-    def get_substrate_id(self):
-        try:
-            with open("/proc/cpuinfo") as f:
-                for line in f:
-                    if "Hardware" in line:
-                        return line.split(":")[-1].strip()
-        except Exception:
-            pass
-        return "SM8750"
-
-    def all_zones(self):
-        zones = []
-        for path in sorted(glob.glob("/sys/class/thermal/thermal_zone*/temp")):
-            try:
-                raw = int(open(path).read().strip())
-                temp = raw / 1000.0
-                if -10 < temp < 200:
-                    name = path.split("/")[-2]
-                    zones.append((name, temp))
-            except Exception:
-                continue
-        return zones
-
-def get_temperature():
-    return HardwareLink().get_thermal_zone_0()
-
-def get_substrate_id():
-    return HardwareLink().get_substrate_id()
+            with open(self._path) as f:
+                v = int(f.read().strip())
+            return v / 10.0 if "battery" in self._path else v / 1000.0
+        except:
+            self.sim = True
+            return self.read()
