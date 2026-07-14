@@ -1,12 +1,58 @@
-"""Sector thermal profiles — SLC v12"""
+#!/usr/bin/env python3
+"""
+core/params_sector.py — Sector-Specific Thermodynamic Profiles
+Defines operational boundaries matching the 38.5°C hardware wall.
+"""
+from dataclasses import dataclass
 
-SECTOR_THERMAL_PROFILES = {
-    "healthcare": {"T_warn":36.0,"T_throttle":38.5,"T_critical":40.0,"T_recovery":34.0,"duty_cycle_warn":0.5,"duty_cycle_throttle":0.2},
-    "defense":    {"T_warn":43.0,"T_throttle":48.0,"T_critical":52.0,"T_recovery":38.0,"duty_cycle_warn":0.7,"duty_cycle_throttle":0.3},
-    "research":   {"T_warn":43.0,"T_throttle":48.0,"T_critical":50.0,"T_recovery":38.0,"duty_cycle_warn":0.7,"duty_cycle_throttle":0.3},
-    "edge":       {"T_warn":40.0,"T_throttle":44.0,"T_critical":48.0,"T_recovery":36.0,"duty_cycle_warn":0.6,"duty_cycle_throttle":0.2},
-    "desktop":    {"T_warn":65.0,"T_throttle":75.0,"T_critical":85.0,"T_recovery":55.0,"duty_cycle_warn":0.9,"duty_cycle_throttle":0.7},
+@dataclass
+class SectorProfile:
+    name: str
+    temp_threshold: float  # °C: Soft limit / Throttling trigger
+    temp_critical: float   # °C: Hard limit / ATOMIC_REDUCTION trigger
+    max_rank: int          # Max matrix rank allocation
+    data_integrity: float  # Target fidelity bound
+    latency_target: float  # ms
+
+SECTOR_PROFILES = {
+    "healthcare": SectorProfile(
+        name="healthcare",
+        temp_threshold=32.0,
+        temp_critical=34.0,
+        max_rank=8,
+        data_integrity=1.00,
+        latency_target=45.0
+    ),
+    "edge": SectorProfile(
+        name="edge",
+        temp_threshold=34.0,
+        temp_critical=35.5,
+        max_rank=10,
+        data_integrity=0.75,
+        latency_target=55.0
+    ),
+    "research": SectorProfile(
+        name="research",
+        temp_threshold=35.5,
+        temp_critical=37.0,
+        max_rank=16,
+        data_integrity=0.70,
+        latency_target=28.0
+    ),
+    "defense": SectorProfile(
+        name="defense",
+        temp_threshold=36.5,
+        temp_critical=38.0,
+        max_rank=12,
+        data_integrity=0.85,
+        latency_target=32.0
+    ),
+    "desktop": SectorProfile(
+        name="desktop",
+        temp_threshold=38.0,
+        temp_critical=38.5,  # Absolute Hardware Ceiling
+        max_rank=32,
+        data_integrity=0.60,
+        latency_target=18.0
+    )
 }
-
-def get_sector_thermal(sector="research"):
-    return SECTOR_THERMAL_PROFILES.get(sector, SECTOR_THERMAL_PROFILES["research"]).copy()
