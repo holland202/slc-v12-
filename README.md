@@ -257,7 +257,7 @@ Five operational profiles tailor the SLC to different deployment contexts:
 | `edge` | 40% | 75% | 90% | IoT/robotics, enclosed hardware |
 | `desktop` | 100% | 60% | 40% | Active cooling, permissive thresholds |
 
-**Healthcare** is the most conservative profile. Operator rank is capped at `r ≤ 8`, thermal throttling activates at 40°C, and all outputs require dual-path verification through VEST.
+**Healthcare** is the most conservative profile. Operator rank is capped at `r ≤ 8`, thermal throttling activates at 34.0°C, and all outputs require dual-path verification through VEST.
 
 **Desktop** is the most permissive, allowing `r ≤ 32`, thermal limits at 38.5°C, and aggressive SMA routing for minimum latency.
 
