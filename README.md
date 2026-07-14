@@ -110,7 +110,7 @@ The SLC executes on the **Snapdragon 8 Elite (SM8750-AB)** platform via the Term
 - Peak Performance: 45 TOPS (INT8)
 - Memory Bandwidth: 77 GB/s
 - Thermal Design: 8W TDP
-- Max Operating: ≤ 85°C
+- Max Operating: ≤ 38.5°C
 
 ---
 
@@ -232,7 +232,7 @@ The SLC operates in a constrained thermodynamic phase space. Every inference is 
 
 | Constraint | Variable | Limit |
 |------------|----------|-------|
-| Temperature | T | ≤ 85°C |
+| Temperature | T | ≤ 38.5°C |
 | Power | P | ≤ 8W |
 | Memory | M | ≤ 10GB (reserved) |
 | Latency | L | Sector-dependent |
@@ -259,7 +259,7 @@ Five operational profiles tailor the SLC to different deployment contexts:
 
 **Healthcare** is the most conservative profile. Operator rank is capped at `r ≤ 8`, thermal throttling activates at 40°C, and all outputs require dual-path verification through VEST.
 
-**Desktop** is the most permissive, allowing `r ≤ 32`, thermal limits at 85°C, and aggressive SMA routing for minimum latency.
+**Desktop** is the most permissive, allowing `r ≤ 32`, thermal limits at 38.5°C, and aggressive SMA routing for minimum latency.
 
 ---
 
