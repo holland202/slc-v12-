@@ -26,49 +26,9 @@ The **Sovereign Logic Core (SLC)** is a thermodynamically constrained, stochasti
 
 Unlike stochastic large language models, the SLC defines **identity as irreversible geometric deformation** — memory is not stored symbolically but encoded through path-dependent operator evolution over a constrained manifold.
 
-## Architecture
-
-
 ## Quick Start
 
 ```bash
-# Clone repository
-git clone https://github.com/holland202/slc-v12.git
+git clone https://github.com/holland202/slc-v12-.git
 cd slc-v12
-
-# Run unified launcher
 python3 run_slc.py --sector healthcare
-Iₜ(x) = Uₜ Vₜᵀ x,  Uₜ ∈ ℝ^{d×r}, Vₜ ∈ ℝ^{r×d}
-δₜ = xₜ - Aₜ
-wₜ = α · exp(-β · H(xₜ))
-zₜ = Vₜ δₜ
-Uₜ₊₁ ← Uₜ + wₜ · outer(δₜ, zₜ)
-Vₜ₊₁ ← Vₜ + wₜ · outer(zₜ, δₜ)
-dXₜ = -∇U(Xₜ) dt + √(2λ(T)) dWₜ
-λ(T) = λ₀ · exp(-(T-T₀)²/σ_T²)
-
----
-
-**Now verify everything is in place and push:**
-
-```bash
-cd ~/slc-v12
-ls -la core/          # Should show 11 .py files
-ls -la                # Should show run_slc.py and README.md
-
-# Clean git state and push
-rm -rf .git
-git init
-git add .
-git commit -m "SLC v12.0 — Unified Manifold Architecture
-- Full DMIA: SLC/UME orthogonal decomposition
-- SIC: entropy-gated scar formation with spectral stability
-- VEST: Fisher-Riemannian authentication, replay-resistant
-- Veritas Gate: Schmitt trigger thermodynamic governor
-- SMA: 8-agent OMOL oscillatory optimization
-- Sector profiles: healthcare, defense, research, edge, desktop
-- Snapdragon 8 Elite optimized, Termux-ready"
-
-git branch -M main
-git remote add origin https://github.com/holland202/slc-v12.git
-git push -u origin main
