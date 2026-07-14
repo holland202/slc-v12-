@@ -1,72 +1,64 @@
-"""ume.py — Umbra Manifold Engine · SLC v12
-
-Stochastic exploratory cognition via Langevin diffusion:
-  dX_t = -∇U(X_t) dt + √(2λ(T)) dW_t
+#!/usr/bin/env python3
+"""
+core/ume.py — Umbra Manifold Engine
+Explores the latent space using temperature-controlled Langevin dynamics.
+dX_t = -∇U(X_t) dt + √(2λ(T)) dW_t
 """
 import numpy as np
-from typing import Optional, Tuple, List
+import math
 
 class UmbraManifoldEngine:
-    """UME: stochastic exploration branch of DMIA."""
-    
-    def __init__(self, dim: int = 512, lambda0: float = 1.0,
-                 T0: float = 38.0, sigma_T: float = 5.0,
-                 dt: float = 0.01):
-        self.dim = dim
-        self.lambda0 = lambda0
-        self.T0 = T0
+    def __init__(self, lambda_0: float = 1.0, T_0: float = 34.0, sigma_T: float = 2.0, dt: float = 0.01):
+        self.lambda_0 = lambda_0
+        self.T_0 = T_0
         self.sigma_T = sigma_T
         self.dt = dt
+
+    def _diffusion_coefficient(self, T: float) -> float:
+        """Calculates temperature-dependent diffusion λ(T)."""
+        return self.lambda_0 * math.exp(-((T - self.T_0)**2) / (self.sigma_T**2))
+
+    def langevin_step(self, X_t: np.ndarray, grad_U: np.ndarray, T: float) -> np.ndarray:
+        """
+        Executes one step of Langevin diffusion using Euler-Maruyama integration.
+        grad_U: The natural gradient -∇U(X_t)
+        T: Current hardware temperature in °C
+        """
+        # Calculate current diffusion coefficient based on thermal state
+        lambda_T = self._diffusion_coefficient(T)
         
-        self.state = np.zeros(dim, dtype=np.float32)
-        self.trajectory: List[np.ndarray] = []
-        self._step_count = 0
+        # Generate discrete Wiener process step (Brownian noise)
+        dW_t = np.random.normal(0, np.sqrt(self.dt), size=X_t.shape)
         
-    def thermal_diffusion_coeff(self, temperature: float) -> float:
-        """λ(T) = λ₀ · exp(-(T-T₀)²/σ_T²)"""
-        return self.lambda0 * np.exp(-((temperature - self.T0) ** 2) / (self.sigma_T ** 2))
-    
-    def potential(self, x: np.ndarray, sic_state) -> float:
-        """U(X) = ½ ||X - SIC_anchor||² + ¼ ||X||⁴"""
-        anchor = sic_state.anchor
-        diff = x - anchor
-        return 0.5 * np.dot(diff, diff) + 0.25 * (np.dot(x, x) ** 2)
-    
-    def gradient(self, x: np.ndarray, sic_state) -> np.ndarray:
-        """∇U(X) = (X - anchor) + ||X||² · X"""
-        anchor = sic_state.anchor
-        return (x - anchor) + np.dot(x, x) * x
-    
-    def step(self, sic_state, temperature: float = 35.0) -> np.ndarray:
-        """Single Langevin step."""
-        lam = self.thermal_diffusion_coeff(temperature)
-        grad = self.gradient(self.state, sic_state)
+        # Langevin update
+        dX_t = -grad_U * self.dt + np.sqrt(2 * lambda_T) * dW_t
         
-        drift = -grad * self.dt
-        noise = np.random.normal(0, 1, self.dim)
-        diffusion = np.sqrt(2 * lam * self.dt) * noise
+        return X_t + dX_t
+
+if __name__ == "__main__":
+    print("--- INITIATING LOCAL UME DIAGNOSTIC ---")
+    ume = UmbraManifoldEngine(lambda_0=1.0, T_0=34.0, sigma_T=2.0, dt=0.01)
+    
+    # Mock parameters
+    X_initial = np.zeros(64)
+    gradient = np.ones(64) * 0.1  # Mock gradient pulling the state
+    
+    # Test 1: Optimal Temperature (T = 34.0°C) -> High exploration (max diffusion)
+    X_opt = ume.langevin_step(X_initial.copy(), gradient, T=34.0)
+    
+    # Test 2: Throttled Temperature (T = 38.0°C) -> Low exploration (diffusion collapse)
+    X_hot = ume.langevin_step(X_initial.copy(), gradient, T=38.0)
+    
+    print(f"Optimal Temp (34.0°C) Diffusion λ(T): {ume._diffusion_coefficient(34.0):.6f}")
+    print(f"Throttled Temp (38.0°C) Diffusion λ(T): {ume._diffusion_coefficient(38.0):.6f}")
+    
+    print(f"\n[UME TRAJECTORY SPREAD]")
+    print(f"Optimal State Vector Norm  : {np.linalg.norm(X_opt):.4f}")
+    print(f"Throttled State Vector Norm: {np.linalg.norm(X_hot):.4f}")
+    
+    if np.linalg.norm(X_opt) > np.linalg.norm(X_hot):
+        print("Status: PASS (Thermal diffusion collapse verified)")
+    else:
+        print("Status: FAIL (Check Gaussian noise scaling)")
         
-        self.state += drift + diffusion
-        self.trajectory.append(self.state.copy())
-        self._step_count += 1
-        
-        return self.state
-    
-    def generate_hypothesis(self, sic_state, temperature: float = 35.0,
-                            n_steps: int = 100) -> np.ndarray:
-        for _ in range(n_steps):
-            self.step(sic_state, temperature)
-        return self.state
-    
-    def project_to_slc(self, sic_state) -> np.ndarray:
-        """Project UME state onto SLC manifold."""
-        U = sic_state.U
-        return U @ (U.T @ self.state)
-    
-    def state_summary(self) -> dict:
-        return {
-            "dim": self.dim,
-            "steps": self._step_count,
-            "trajectory_length": len(self.trajectory),
-            "state_norm": float(np.linalg.norm(self.state)),
-        }
+    print("--- DIAGNOSTIC COMPLETE ---")
