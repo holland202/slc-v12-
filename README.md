@@ -18,7 +18,7 @@
 <p align="center">
   <img src="docs/images/slc_architecture.png" width="100%" alt="SLC System Architecture">
 </p>
-
+![SLC v12.0 Manifold Dynamics](slc_v12_futuristic.gif)
 ---
 
 ## Metadata
