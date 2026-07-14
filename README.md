@@ -309,7 +309,7 @@ If `R > R_threshold(sector)`, the inference is queued for cooler execution or re
 ---
 
 ## Quick Start
-
+python3 sovereign_dashboard.py   # Live terminal dashboard
 ```bash
 # Clone the repository
 git clone https://github.com/holland202/slc-v12-.git
