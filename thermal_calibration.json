@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-07-15T19:25:24.203706+00:00",
+  "zone": "cpu,cpuss,gpuss",
+  "baseline_mean": 38.09,
+  "baseline_max_observed": 76.1,
+  "n_sessions": 3,
+  "sectors": {
+    "research": {
+      "temp_threshold": 77.1,
+      "temp_critical": 78.1
+    },
+    "defense": {
+      "temp_threshold": 78.1,
+      "temp_critical": 79.6
+    }
+  }
+}
