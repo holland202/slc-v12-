@@ -38,7 +38,7 @@
 | **Governor** | SLC-Veritas |
 | **Thermal Loop** | Closed-Loop |
 | **Status** | `HARDENED_KERNEL_ACTIVE` |
-| **Modules wired / total** | 10 / 10 (all of core/ is now imported and exercised by run_slc.py) |
+| **Modules wired / total** | **5 / 10** (run_slc.py v12.1 imports params, hardware_link, veritas_gate, sic, vest, ume; the other 4 core/ modules are present but NOT imported — see reconciliation note) |
 
 > *Vincit Omnia Veritas*
 
@@ -63,6 +63,19 @@
 - [License](#license)
 
 ---
+
+## ⚠ Reconciliation note (2026-07-19)
+
+**This README described an aspirational v12.0 6-stage / 10-module loop. The code
+that actually runs is v12.1: a 3-cycle loop importing 5 modules
+(`params`, `hardware_link`, `veritas_gate`, `sic`, `vest`, `ume`) with
+`fidelity_threshold=4.5`.** Four modules — `pre_inference_gate`,
+`transfer_controller`, `crystallization_memory`, `sma` — are present in `core/`
+but imported by zero files; the documented 6-stage security pipeline does not
+currently execute. Sections below that describe the 6-stage loop are the *target*
+architecture, not the current runtime, and are marked accordingly. Building the
+full 6-stage loop is a separate, future task. Verified by running the repo; see
+findings ledger F19. — Claude Fable 5 + holland202
 
 ## Overview
 
@@ -299,8 +312,10 @@ been corrected below.
   <img src="docs/images/slc_pipeline.png" width="95%" alt="Six-stage security pipeline, matching run_slc.py">
 </p>
 
-Every inference cycle in `run_slc.py` passes through six stages, in this
-exact order:
+**TARGET ARCHITECTURE (not current runtime — see reconciliation note).** The
+v12.0 design passes each cycle through six stages in this order. The live v12.1
+loop executes only stages 1, 2, 4, 5 (veritas_gate, ume, vest, sic); stages 3
+and 6 and the sma optimizer are present in core/ but not yet wired:
 
 | Stage | Module | Check |
 |-------|--------|-------|
@@ -394,12 +409,12 @@ problem.
 | `core/hardware_link.py` | Reads real sysfs thermal zones, simulates when off-device | Wired |
 | `core/veritas_gate.py` | Gibbs-mandate + hard thermal lock (Stage 1) | Wired |
 | `core/ume.py` | Langevin latent-space exploration (Stage 2) | Wired |
-| `core/pre_inference_gate.py` | Composite risk-score gate (Stage 3) | Wired as of this revision |
+| `core/pre_inference_gate.py` | Composite risk-score gate (Stage 3) | **PRESENT, NOT WIRED** (imported by 0 files) |
 | `core/vest.py` | Manifold-distance authentication (Stage 4) | Wired |
 | `core/sic.py` | Rank-1 natural-gradient scar update (Stage 5) | Wired |
-| `core/crystallization_memory.py` | Rolling history of crystallizations/deferrals (Stage 5) | Wired as of this revision |
-| `core/transfer_controller.py` | Commit-delta drafting + audit (Stage 6) | Wired as of this revision |
-| `core/sma.py` | 8-agent slime-mold hyperparameter optimizer | Wired as of this revision (logs only, doesn't yet apply live) |
+| `core/crystallization_memory.py` | Rolling history of crystallizations/deferrals (Stage 5) | **PRESENT, NOT WIRED** (imported by 0 files) |
+| `core/transfer_controller.py` | Commit-delta drafting + audit (Stage 6) | **PRESENT, NOT WIRED** (imported by 0 files) |
+| `core/sma.py` | 8-agent slime-mold hyperparameter optimizer | **PRESENT, NOT WIRED** (imported by 0 files) |
 
 ---
 
