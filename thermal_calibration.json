@@ -4,7 +4,7 @@
   "baseline_mean": 38.09,
   "baseline_max_observed": 76.1,
   "n_sessions": 3,
-  "sectors": {
+  "sectors_DISABLED_2026-07-19": {
     "research": {
       "temp_threshold": 77.1,
       "temp_critical": 78.1
@@ -13,5 +13,7 @@
       "temp_threshold": 78.1,
       "temp_critical": 79.6
     }
-  }
+  },
+  "note": "sectors block emptied: 2026-07-15 calibration wrote baseline_max_observed (76.1C spike) as threshold, inverting the safety limit (F19). Regenerate via calibrate_thermal.py on real device; params.py now clamps any value above 38.5C regardless.",
+  "sectors": {}
 }

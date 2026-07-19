@@ -58,8 +58,22 @@ class RuntimeConfig:
         if not sector_cal:
             return
 
-        self.temp_threshold = sector_cal["temp_threshold"]
-        self.temp_critical = sector_cal["temp_critical"]
+        # SAFETY CLAMP (fix 2026-07-19, F19 defect 2): a calibration file is
+        # untrusted input. The 2026-07-15 file wrote baseline_max_observed
+        # (76.1C, a transient load spike) back as the THRESHOLD — inverting the
+        # safety limit. Any calibrated ceiling above the 38.5C hardware wall, or
+        # above the sector's own verified default, is REFUSED. A thermometer
+        # reading is not a safety threshold.
+        HARDWARE_WALL = 38.5
+        cal_thresh = sector_cal["temp_threshold"]
+        cal_crit = sector_cal["temp_critical"]
+        if cal_thresh > HARDWARE_WALL or cal_crit > HARDWARE_WALL or cal_crit > self.profile.temp_critical:
+            print(f"[PARAMS-WARN] calibration for '{sector_name}' "
+                  f"(thresh={cal_thresh}C crit={cal_crit}C) exceeds the "
+                  f"{HARDWARE_WALL}C wall or sector default; REFUSED, using defaults.")
+            return
+        self.temp_threshold = cal_thresh
+        self.temp_critical = cal_crit
         self.calibration_applied = True
         self._calibration_meta = {
             "baseline_mean": cal.get("baseline_mean"),
