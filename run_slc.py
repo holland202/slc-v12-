@@ -8,6 +8,13 @@ from core.sic import SICManifold
 from core.vest import VESTunnel
 from core.ume import UmbraManifoldEngine
 
+def _compute_entropy(x: np.ndarray) -> float:
+    """Shannon entropy of softmax-normalized |x| — high for uniform, low for peaked."""
+    ax = np.abs(x)
+    p = ax / (np.sum(ax) + 1e-12)
+    p = np.clip(p, 1e-12, 1.0)
+    return float(-np.sum(p * np.log(p)))
+
 def main():
     sector = sys.argv[1] if len(sys.argv) > 1 else "defense"
     cfg = RuntimeConfig(sector)
@@ -31,7 +38,8 @@ def main():
         
         is_authentic, distance = vest.authenticate(X_explored, sic.U, sic.V)
         if is_authentic:
-            w_t = sic.scar_update(X_explored, rng.normal(0, 0.5, 64), 0.3)
+            H_x = _compute_entropy(X_explored)
+            w_t = sic.scar_update(X_explored, rng.normal(0, 0.5, 64), H_x)
             print(f"[CYCLE {step:02d}] SUCCESS: T={T:.2f}C | ScarWeight={w_t:.6f}")
         else:
             print(f"[CYCLE {step:02d}] REJECTED: Distance {distance:.4f}")
