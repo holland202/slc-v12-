@@ -324,7 +324,7 @@ and 6 and the sma optimizer are present in core/ but not yet wired:
 | 3 | `core/pre_inference_gate.py` | Composite risk score from crystallization history |
 | 4 | `core/vest.py` | Semantic / topological authentication |
 | 5 | `core/sic.py` + `core/crystallization_memory.py` | Scar formation + history recording |
-| 6 | `core/transfer_controller.py` | Commit audit (Fisher sharpness, spectral norm, rank, geodesic distance) |
+| 6 | `core/transfer_controller.py` | Commit audit (spectral concentration, spectral norm, rank, relative delta norm) |
 
 `core/sma.py` runs every cycle alongside these six stages as a background
 hyperparameter optimizer, not as a gating stage -- it cannot block a cycle.
@@ -390,11 +390,11 @@ rather than crashing.
   -> [PRE-GATE] score=0.9250 (PASS) {...}
   -> [VEST] AUTHENTICATED: Distance 5.7321
   -> [SIC] SCAR FORMED: Weight 0.010847 | Total Scars: 1
-  -> [TRANSFER] REJECTED (C1_fisher) | fisher=0.3085 spectral=... geo=...
+  -> [TRANSFER] REJECTED (C1_concentration) | concentration=0.3085 spectral=... geo=...
   -> [SMA] gen=1 best_fitness=... (alpha=..., beta=..., rank=...)
 ```
 
-The Transfer stage rejecting on `C1_fisher` every cycle is expected given the
+The Transfer stage rejecting on `C1_concentration` every cycle is expected given the
 current default threshold -- see Known Tuning Issues, not a crash or install
 problem.
 
@@ -469,10 +469,10 @@ modules were never actually called together:
    caused permanent deferral with no way to recover (no new crystallizations
    get recorded once deferred). Raised to `6.0` in `run_slc.py`, which
    reduces but does not eliminate the effect over long runs.
-2. **Transfer Controller's Fisher-sharpness check almost never passes.**
-   `fisher_threshold=0.85` assumes a singular-value concentration that
+2. **Transfer Controller's spectral-concentration check almost never passes.**
+   `concentration_threshold=0.85` assumes a singular-value concentration that
    `SICManifold` at `dim=64, rank=8` doesn't actually produce (~0.31 in
-   practice) -- every commit in test runs was rejected on `C1_fisher`.
+   practice) -- every commit in test runs was rejected on `C1_concentration`.
 
 Neither is a bug in any individual module -- each behaves exactly as its own
 code says. They're a mismatch between modules designed independently and

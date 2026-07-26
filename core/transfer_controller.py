@@ -6,20 +6,20 @@ from dataclasses import dataclass
 @dataclass
 class AuditResult:
     passed: bool
-    fisher_sharpness: float
+    spectral_concentration: float
     spectral_norm: float
     rank_preserved: bool
-    geodesic_distance: float
+    relative_delta_norm: float
     thermal_ok: bool
     all_checks: Dict
     rejection_reason: Optional[str]
 
 class TransferController:
-    def __init__(self, fisher_threshold=0.85, spectral_norm_max=2.0,
-                 geodesic_distance_max=0.15, thermal_multiplier=1.0):
-        self.fisher_threshold      = fisher_threshold
+    def __init__(self, concentration_threshold=0.85, spectral_norm_max=2.0,
+                 relative_delta_max=0.15, thermal_multiplier=1.0):
+        self.concentration_threshold      = concentration_threshold
         self.spectral_norm_max     = spectral_norm_max
-        self.geodesic_distance_max = geodesic_distance_max
+        self.relative_delta_max = relative_delta_max
         self.thermal_multiplier    = thermal_multiplier
         self._submissions = 0
         self._accepts     = 0
@@ -44,9 +44,11 @@ class TransferController:
 
         total = float(np.sum(sv))
         top_k = float(np.sum(sv[:max(1,len(sv)//4)]))
-        fisher = top_k / (total + 1e-10)
-        eff_thresh = self.fisher_threshold * self.thermal_multiplier
-        c1 = fisher >= eff_thresh
+        # top-quartile share of singular-value mass. NOT Fisher information:
+        # this is a spectral energy concentration ratio.
+        concentration = top_k / (total + 1e-10)
+        eff_thresh = self.concentration_threshold * self.thermal_multiplier
+        c1 = concentration >= eff_thresh
 
         proposed = U + delta.matrix
         spec = float(np.linalg.norm(proposed, ord=2))
@@ -58,17 +60,17 @@ class TransferController:
         c3 = rank_after >= rank_before
 
         geo = float(np.linalg.norm(delta.matrix,"fro")) / (float(np.linalg.norm(U,"fro"))+1e-10)
-        c4 = geo <= self.geodesic_distance_max
+        c4 = geo <= self.relative_delta_max
 
         lv = cryst_memory.mean_logit_variance()
         c5 = lv >= 0.60
 
         all_pass = c1 and c2 and c3 and c4 and c5
         checks = {
-            "C1_fisher":   {"value":round(fisher,4), "threshold":eff_thresh, "pass":c1},
+            "C1_concentration":   {"value":round(concentration,4), "threshold":eff_thresh, "pass":c1},
             "C2_spectral": {"value":round(spec,4),   "max":self.spectral_norm_max, "pass":c2},
             "C3_rank":     {"before":rank_before,    "after":rank_after, "pass":c3},
-            "C4_geodesic": {"value":round(geo,4),    "max":self.geodesic_distance_max, "pass":c4},
+            "C4_delta_norm": {"value":round(geo,4),    "max":self.relative_delta_max, "pass":c4},
             "C5_logit":    {"value":round(lv,4),     "min":0.60, "pass":c5},
         }
         rejection_reason = None if all_pass else next(
@@ -77,9 +79,9 @@ class TransferController:
         if all_pass: self._accepts += 1
 
         return AuditResult(
-            passed=all_pass, fisher_sharpness=round(fisher,4),
+            passed=all_pass, spectral_concentration=round(concentration,4),
             spectral_norm=round(spec,4), rank_preserved=c3,
-            geodesic_distance=round(geo,4), thermal_ok=c5,
+            relative_delta_norm=round(geo,4), thermal_ok=c5,
             all_checks=checks, rejection_reason=rejection_reason,
         )
 
@@ -87,5 +89,5 @@ class TransferController:
         return {
             "total_submissions": self._submissions,
             "accept_rate": round(self._accepts/max(1,self._submissions),4),
-            "fisher_threshold": self.fisher_threshold,
+            "concentration_threshold": self.concentration_threshold,
         }
