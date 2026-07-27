@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# vacuity-lint: intentional - reads live device temperature via ThermalMonitor, so its verdict depends on how warm the phone is; deliberately excluded from run_all_tests.py
 """
 tests/test_governance_loop.py
 Locally verifies the Veritas Gate and Hardware Link.
