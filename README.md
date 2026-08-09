@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-HARDENED_KERNEL_ACTIVE-238636?style=for-the-badge&labelColor=161b22" alt="Status">
-  <img src="https://img.shields.io/badge/Classification-RESTRICTED%2F%20HIGH--VALUE%20NODE-f85149?style=for-the-badge&labelColor=161b22" alt="Classification">
+  <img src="https://img.shields.io/badge/Probes-8%2F10%20on%20device-58a6ff?style=for-the-badge&labelColor=161b22" alt="Probe result">
+  <img src="https://img.shields.io/badge/Predictions-10%20registered-a371f7?style=for-the-badge&labelColor=161b22" alt="Registered predictions">
   <img src="https://img.shields.io/badge/Substrate-SM8750--AB-58a6ff?style=for-the-badge&labelColor=161b22" alt="Substrate">
   <img src="https://img.shields.io/badge/Runtime-Termux%20%7C%20LiteRT%20XNNPACK-a371f7?style=for-the-badge&labelColor=161b22" alt="Runtime">
   <img src="https://img.shields.io/badge/License-MIT-3fb950?style=for-the-badge&labelColor=161b22" alt="License">
@@ -63,7 +63,7 @@ Full write-up, including the defects found and the two claims that were refuted 
 | **Scheduler** | RT-PREEMPT |
 | **Governor** | SLC-Veritas |
 | **Thermal Loop** | Closed-Loop |
-| **Status** | `HARDENED_KERNEL_ACTIVE` |
+| **Probe result** | `8/10 registered predictions match on device` |
 | **Modules wired / total** | **5 / 10** (run_slc.py v12.1 imports params, hardware_link, veritas_gate, sic, vest, ume; the other 4 core/ modules are present but NOT imported — see reconciliation note) |
 
 > *Vincit Omnia Veritas*
