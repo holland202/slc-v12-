@@ -26,6 +26,32 @@
 
 ---
 
+## Verify it yourself
+
+This repo ships the instrument, not just the claims.
+
+```bash
+python3 demo.py              # paced walkthrough, ~2 min (--fast to skip pauses)
+python3 probe_slc_claims.py  # 10 registered predictions, exit 1 on any mismatch
+python3 run_engine.py 20     # 20 cycles of the 10-step governance loop
+python3 run_all_tests.py     # thermal suites
+```
+
+Each probe prints its **expected** value beside its **measured** value. Verdicts are `MATCH`, `MISMATCH`, or `BLOCKED` — the last meaning the instrument could not execute, which is not the same result as a prediction being wrong.
+
+**It currently reports 8/10 on the author's device, and that is the honest number.**
+
+- **P0 fails.** The defense profile caps at 36.5 °C. This Galaxy S25 runs 39 °C actively cooled, ~45 °C idle, and 65 °C under load. The hardware cannot run the profile. Registered as a substrate claim so it cannot quietly disappear.
+- **P1b fails.** `VeritasGate.evaluate()`'s constant-coefficient path cannot refuse at any reachable temperature, and `run_slc.py` still uses it. Left unmigrated on purpose, and registered rather than hidden.
+
+Reproducibility: `||U @ V.T|| = 2.247657e+00` across seven consecutive runs, including two with `PYTHONHASHSEED` forced random.
+
+Full write-up, including the defects found and the two claims that were refuted and then fixed: [`FINDINGS_SLC_ENGINE.md`](FINDINGS_SLC_ENGINE.md).
+
+---
+
+---
+
 ## Metadata
 
 | Field | Value |
