@@ -65,9 +65,16 @@ class FixedTemp:
         return self.t
 
 
+# Engine acts run against an injected 30.0 C thermometer so the demo is
+# reproducible on any device in any thermal state. The live substrate is
+# reported honestly in the header, and the thermal lock is exercised against
+# injected temperatures in Act 3.
+BENCH_TEMP = 30.0
+
+
 def new_engine(logvar=0.90, seed=42):
     with quiet():
-        e = Engine(d=64, rank=8, seed=seed)
+        e = Engine(d=64, rank=8, seed=seed, monitor=FixedTemp(BENCH_TEMP))
         e.set_gguf_engine(MockGGUF(logit_variance=logvar))
     return e
 
@@ -75,7 +82,17 @@ def new_engine(logvar=0.90, seed=42):
 say()
 say("  SOVEREIGN LOGIC CORE — 10-step governance loop", 0.4)
 say("  Snapdragon 8 Elite / Termux / NumPy only", 0.4)
-say("  Vincit Omnia Veritas", 1.6)
+say("  Vincit Omnia Veritas", 1.0)
+say()
+with quiet():
+    from core.hardware_link import ThermalMonitor
+    _live_mon = ThermalMonitor()
+_live_T = _live_mon.read()
+_cfg0 = RuntimeConfig("defense")
+say(f"  live substrate    : {_live_T:.1f} C", 0.5)
+say(f"  defense threshold : {_cfg0.temp_threshold:.1f} C"
+    + ("   <- substrate is above it" if _live_T >= _cfg0.temp_threshold else ""), 0.5)
+say(f"  governance acts run at an injected {BENCH_TEMP:.1f} C so they reproduce", 1.6)
 
 # ---------------------------------------------------------------- 1
 head("1. THE LOOP RUNS")
@@ -111,32 +128,42 @@ say()
 say("  Clean flip at the registered threshold. Proven both directions.", 1.8)
 
 # ---------------------------------------------------------------- 3
-head("3. TWO OF MY OWN CLAIMS, REFUTED")
+head("3. BOTH REFUTATIONS, NOW FIXED")
 cfg = RuntimeConfig("defense")
-say("CLAIM: 'Veritas Gate — Gibbs free energy (dG < 0) enforcement'", 1.0)
-T = np.linspace(0.0, 100.0, 2001)
-dG = cfg.dH - T * cfg.dS
-say(f"  dG = {cfg.dH} - {cfg.dS} * T   (both constants, not state)", 0.8)
-say(f"  rejecting temperatures over 0-100 C : {int(np.sum(dG >= 0))}", 0.8)
-say(f"  dG >= 0 only below {cfg.dH / cfg.dS:.1f} C", 1.0)
-say("  -> REFUTED. The Gibbs term cannot refuse. KEPT.", 1.6)
+say("Last week these two were REFUTED by this same instrument.", 1.2)
 say()
-say("  The governor that DOES work is a separate hard lock:", 0.8)
-for t in (cfg.temp_critical - 5.0, cfg.temp_critical + 5.0):
-    _, _, ok, temp = RepoGate(cfg, FixedTemp(t)).evaluate()
-    say(f"    T = {temp:5.1f} C  ->  {'run' if ok else 'HALT'}", 0.7)
+say("WAS: 'Gibbs enforcement' with dH and dS as fixed constants.", 0.8)
+say(f"     dG = {cfg.dH} - {cfg.dS} * T  ->  0 rejecting temps over 0-100 C.", 1.2)
+say("NOW: dH and dS measured from the real operator change.", 1.0)
+say("     Drive scar magnitude across the admission boundary:", 1.0)
 say()
-say("CLAIM: 'Langevin diffusion on the Umbra Manifold'", 1.0)
-ume = UmbraManifoldEngine(T_0=cfg.temp_threshold)
-x0 = np.zeros(64)
-np.random.seed(0)
-cold = np.mean([np.linalg.norm(ume.explore(x0, T=1.0)[0] - x0) for _ in range(400)])
-np.random.seed(0)
-hot = np.mean([np.linalg.norm(ume.explore(x0, T=1000.0)[0] - x0) for _ in range(400)])
-say(f"  mean step at T=1     : {cold:.6f}", 0.7)
-say(f"  mean step at T=1000  : {hot:.6f}", 0.7)
-say("  Langevin scales noise with temperature. This does not.", 0.8)
-say("  -> REFUTED. Fixed-variance random walk. KEPT.", 1.8)
+say("       alpha        scars admitted / 10", 0.6)
+for a in (0.01, 0.3, 1.0, 3.0):
+    e = new_engine()
+    with quiet():
+        e.scar_alpha = a
+        for _ in range(10):
+            e.step()
+    n_ok = e.sic.scars_admitted
+    say(f"       {a:<6}       {n_ok:2d}   {'admit' if n_ok >= 5 else 'REFUSE'}", 0.8)
+say()
+say("  It refuses. A gate that cannot refuse is not a gate.", 1.6)
+say()
+say("WAS: 'Langevin diffusion' — explore() never read its T argument.", 1.0)
+say("     mean step at T=1: 0.789665.  At T=1000: 0.789665. Identical.", 1.2)
+say("NOW: Euler-Maruyama, diffusion coefficient collapsing at T_critical:", 1.0)
+say()
+ume = UmbraManifoldEngine(T_0=cfg.temp_threshold, T_critical=cfg.temp_critical)
+x0 = np.ones(64)
+say("        T (C)     lambda     mean |dx|      mode", 0.6)
+for t in (30.0, cfg.temp_threshold, (cfg.temp_threshold + cfg.temp_critical) / 2,
+          cfg.temp_critical):
+    np.random.seed(0)
+    m = np.mean([np.linalg.norm(ume.explore(x0, T=t)[0] - x0) for _ in range(200)])
+    say(f"       {t:5.1f}     {ume.diffusion_coefficient(t):.4f}     {m:.6f}     "
+        f"{ume.explore(x0, T=t)[1]}", 0.8)
+say()
+say("  Noise collapses to zero as the substrate approaches its limit.", 1.6)
 
 # ---------------------------------------------------------------- 4
 head("4. IT REPRODUCES")
@@ -148,8 +175,8 @@ for i in (1, 2, 3):
             e.step()
     say(f"  run {i}   ||U @ V.T|| = {np.linalg.norm(e.sic.U @ e.sic.V.T):.6e}", 0.7)
 say()
-say("  Clone it. You get these two failures too.", 1.2)
+say("  Clone it. You get the same numbers.", 1.2)
 say()
-say("  python3 probe_slc_claims.py     # 8 registered predictions, 6 match", 0.8)
+say("  python3 probe_slc_claims.py     # 9 registered predictions, 8 match", 0.8)
 say("  github.com/holland202/slc-v12-", 1.0)
 say()

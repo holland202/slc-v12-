@@ -41,8 +41,8 @@ from core.ume import UmbraManifoldEngine as _RepoUME
 class HardwareLink:
     """engine.py calls .get_thermal_zone_0(); repo exposes ThermalMonitor.read()."""
 
-    def __init__(self, keywords=None):
-        self.monitor = ThermalMonitor(keywords)
+    def __init__(self, keywords=None, monitor=None):
+        self.monitor = monitor if monitor is not None else ThermalMonitor(keywords)
 
     def get_thermal_zone_0(self) -> float:
         return self.monitor.read()
@@ -73,6 +73,13 @@ class VeritasGate:
         if T > self.cfg.temp_threshold:
             return "THROTTLE"
         return "NORMAL"
+
+    def admit_transition(self, U, V, U_new, V_new):
+        """State-dependent Gibbs admission for a proposed scar."""
+        dH, dS = _RepoVeritasGate.state_deltas(U, V, U_new, V_new)
+        aT, dG, admit, T = self._gate.evaluate_transition(dH, dS)
+        return {"dH": float(dH), "dS": float(dS), "dG": float(dG),
+                "admit": bool(admit), "T": float(T), "aT": float(aT)}
 
 
 class VEST:

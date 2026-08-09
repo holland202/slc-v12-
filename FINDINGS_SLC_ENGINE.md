@@ -106,6 +106,71 @@ two-branch numpy logistic. Max abs diff vs `scipy.special.expit` over
 
 ---
 
+## FIXED — both refutations closed
+
+### P1 — the Gibbs gate now enforces
+
+`dH` and `dS` were fixed config constants (`-0.1`, `0.02`), so
+`dG = -0.1 - 0.02*T` was negative at every reachable temperature: **0 rejecting
+temperatures over 0-100 C**. Now `VeritasGate.evaluate_transition(dH, dS)` takes
+deltas measured from the actual operator change, per the SLC v12 spec's
+`E_t = ||U_t||_F^2 + ||V_t||_F^2` and spectral entropy `S_t`. Step 7 snapshots
+the operator, applies the proposed scar, measures the real dH/dS, and rolls back
+if `dG >= 0`.
+
+Anti-vacuity — driven across the admission boundary, both outcomes occur:
+
+```
+   alpha | admitted |      mean dG | outcome
+   0.001 |       10 |      -0.0001 | ADMIT
+    0.01 |       10 |      -0.0014 | ADMIT
+     0.3 |       10 |      -0.0322 | ADMIT
+     1.0 |        9 |      -0.0501 | ADMIT
+     3.0 |        1 |      +0.2963 | REFUSE
+```
+
+**P1b, kept:** `evaluate()`'s constant path is deliberately unchanged so
+`run_slc.py` and the thermal suites keep their behaviour. That path still cannot
+refuse, and `run_slc.py` still uses it. Registered as a standing mismatch rather
+than quietly migrated.
+
+### P3 — the Umbra Manifold now does Langevin diffusion
+
+Was `X_t + np.random.normal(0, 0.1)` with `T` accepted and never read. Now
+Euler-Maruyama on an Ornstein-Uhlenbeck process,
+`X_{t+1} = X_t - eta*X_t*dt + sqrt(2*lambda(T)*dt)*xi`, with
+`lambda(T) = lambda_0 * clip((T_c - T)/(T_c - T_0), 0, 1)` — the spec's thermal
+governor, `lambda -> 0` as `T -> T_c`. `lambda_0 = 0.5` so `sqrt(2*lambda_0*dt) = 0.1`
+at `dt=0.01`, preserving the old step scale at full headroom.
+
+```
+   T (C)     lambda     mean |dx|      mode
+    30.0     0.5000     0.808874     LANGEVIN_EXPLORE
+    36.5     0.5000     0.808874     LANGEVIN_EXPLORE
+    37.2     0.2500     0.583786     LANGEVIN_THROTTLED
+    38.0     0.0000     0.160000     THERMAL_COLLAPSE
+```
+
+At `T_critical` the stochastic term is exactly zero and only the deterministic
+drift remains — the spec's collapse onto the fixed point.
+
+Probes now report **10 registered predictions**. Container: 9/10. On the S25 Ultra 2026-08-09: **8/10**, with P0 and P1b the two mismatches.
+
+### P0 — this device cannot run the defense profile
+
+Registered as a SUBSTRATE claim, not a code claim, and it fails:
+
+```
+PREDICTED : live compute temperature below 36.5 C
+MEASURED  : live max compute zone = 66.90 C vs threshold 36.5 C
+```
+
+68 thermal zones dumped on device: max 50.0 C, median 38.4 C at rest. The two hottest are modem radios (mmw_ific0, sdr0) which never matched the cpu/cpuss/gpuss keywords. Three report -273.0 C — disabled sensors at absolute zero, harmless under a max but fatal to any mean. The binding constraint is that cpu-0-1-1 idles at 44.8 C and passes 65 C under numpy load, while defense temp_threshold is 36.5 C. run_slc.py printed HALT at 65.30 / 66.10 / 67.20 C on three consecutive cycles. The governor was right; the profile is not reachable on this silicon.
+
+### Instrument defect this exposed
+
+P1, P7 and P8 read the live thermometer, so a warm phone reported them as MISMATCH — a weather report, not an experiment, and precisely how a thermal event gets mistaken for broken code. Engine now takes an injectable monitor; probes and demo run governance acts at 30.0 C. BLOCKED added as a third verdict, distinct from MISMATCH: instrument could not execute is not the same result as prediction was wrong.
+
 ## Still open — these need your call, I did not touch them
 
 ### P1 REFUTED — the ΔG < 0 gate cannot refuse at any reachable temperature

@@ -21,12 +21,21 @@ from core.ume import UmbraManifoldEngine
 RESULTS = []
 
 
-def record(pid, claim, predicted, measured, ok):
-    RESULTS.append((pid, claim, predicted, measured, ok))
+def record(pid, claim, predicted, measured, ok, blocked=False):
+    """
+    ok=True MATCH, ok=False MISMATCH, blocked=True BLOCKED.
+
+    BLOCKED is not a failure. It means the instrument could not execute -- the
+    substrate was thermally locked, a file was missing -- so the prediction was
+    never tested. Reporting that as MISMATCH would mean a hot phone reads as a
+    refuted claim, which is how a thermal event gets mistaken for broken code.
+    """
+    v = "BLOCKED" if blocked else ("MATCH" if ok else "MISMATCH")
+    RESULTS.append((pid, claim, predicted, measured, ok, blocked))
     print(f"\n[{pid}] {claim}")
     print(f"      PREDICTED : {predicted}")
     print(f"      MEASURED  : {measured}")
-    print(f"      VERDICT   : {'MATCH' if ok else 'MISMATCH'}")
+    print(f"      VERDICT   : {v}")
 
 
 class FixedTemp:
@@ -38,22 +47,77 @@ class FixedTemp:
         return self.t
 
 
+# Engine probes run against an INJECTED thermometer, not the live substrate.
+# Measured on the S25 Ultra 2026-08-09: cpu-0-1-1 idles at 44.8 C and passes
+# 65 C under numpy load, while the defense profile's temp_threshold is 36.5 C.
+# Probes that read the live sensor therefore reported MISMATCH for P1/P7/P8
+# whenever the phone was warm -- a weather report, not an experiment. The
+# thermal lock itself is still tested, against injected temperatures, in P2.
+BENCH_TEMP = 30.0
+
+# ---------------------------------------------------------------- P0
+# Device reality check. Not a code claim -- a substrate claim.
+try:
+    from core.hardware_link import ThermalMonitor
+    import io as _io0, contextlib as _ctx0
+    _b = _io0.StringIO()
+    with _ctx0.redirect_stdout(_b):
+        _mon = ThermalMonitor()
+    _live = _mon.read()
+    _cfg0 = RuntimeConfig("defense")
+    record(
+        "P0", "This substrate can run the defense profile (live T < temp_threshold)",
+        f"live compute temperature below {_cfg0.temp_threshold} C",
+        f"live max compute zone = {_live:.2f} C vs threshold {_cfg0.temp_threshold} C",
+        _live < _cfg0.temp_threshold,
+    )
+except Exception as _e:
+    record("P0", "This substrate can run the defense profile",
+           "readable thermometer", f"{type(_e).__name__}: {_e}", False)
+
 # ---------------------------------------------------------------- P1
-# Claim under test: "Veritas Gate - Gibbs free energy (dG < 0) enforcement"
-# A gate that enforces something must be able to refuse.
+# Claim under test: "Veritas Gate - Gibbs free energy (dG < 0) enforcement".
+# A gate that enforces must be able to refuse. dH and dS are now measured from
+# the actual operator change, so drive scar magnitude across the admission
+# boundary and require BOTH outcomes.
 cfg = RuntimeConfig("defense")
-# CORRECTION (first draft of this probe swept [-50,150]C and PASSED, because
-# dG >= 0 for T <= -5C. That bar was wrong: a silicon junction never sees
-# -5C. The registered range is the reachable one.)
+import io as _io, contextlib as _ctx
+from core.engine import Engine as _Eng
+from run_engine import MockGGUF as _Mock
+
+
+def _admitted_at(alpha):
+    buf = _io.StringIO()
+    with _ctx.redirect_stdout(buf):
+        e = _Eng(d=64, rank=8, seed=42, scar_alpha=alpha,
+                 monitor=FixedTemp(BENCH_TEMP))
+        e.set_gguf_engine(_Mock(logit_variance=0.90))
+        for _ in range(10):
+            e.step()
+    return e.sic.scars_admitted
+
+
+small, large = _admitted_at(0.01), _admitted_at(3.0)
+record(
+    "P1", "Gibbs admission can BOTH admit and refuse a real state transition",
+    "alpha=0.01 -> 10/10 admitted; alpha=3.0 -> fewer than 5/10 admitted",
+    f"alpha=0.01 -> {small}/10 admitted; alpha=3.0 -> {large}/10 admitted",
+    small == 10 and large < 5,
+)
+
+# ---------------------------------------------------------------- P1b
+# The legacy evaluate() path, which run_slc.py still uses, was left unchanged
+# on purpose so the 3-cycle loop and the thermal suites keep their behaviour.
+# It is still structurally unable to refuse. REFUTED, KEPT.
 temps = np.linspace(0.0, 100.0, 2001)
 dG_vals = cfg.dH - temps * cfg.dS
 n_reject = int(np.sum(dG_vals >= 0))
-T_break = cfg.dH / cfg.dS  # dG = 0 here
 record(
-    "P1", "The dG<0 term can refuse at a REACHABLE temperature (0-100 C)",
+    "P1b", "Legacy evaluate() constant-coefficient path can refuse (run_slc.py uses this)",
     "at least 1 rejecting temperature in [0, 100] C",
-    f"{n_reject} rejecting temps; dG range [{dG_vals.min():.4f}, {dG_vals.max():.4f}]; "
-    f"dG = {cfg.dH} - {cfg.dS}*T, so dG>=0 only for T <= {T_break:.1f} C",
+    f"{n_reject} rejecting temps; dG = {cfg.dH} - {cfg.dS}*T, so dG>=0 only for "
+    f"T <= {cfg.dH / cfg.dS:.1f} C. The 10-step engine uses evaluate_transition() "
+    f"instead, which P1 shows CAN refuse; run_slc.py has not been migrated.",
     n_reject > 0,
 )
 
@@ -80,12 +144,15 @@ cold = np.array([np.linalg.norm(ume.explore(x0, T=1.0)[0] - x0) for _ in range(4
 np.random.seed(0)
 hot = np.array([np.linalg.norm(ume.explore(x0, T=1000.0)[0] - x0) for _ in range(400)])
 identical = np.array_equal(cold, hot)
+lam_lo = ume.diffusion_coefficient(cfg.temp_threshold - 5.0)
+lam_hi = ume.diffusion_coefficient(ume.T_critical)
 record(
     "P3", "UME step size responds to temperature (Langevin thermal coupling)",
-    "mean step at T=1000 differs from T=1",
+    "mean step at T=1000 differs from T=1, and lambda -> 0.0 at T_critical",
     f"mean|dx| T=1: {cold.mean():.6f}  T=1000: {hot.mean():.6f}  "
-    f"bitwise-identical={identical}",
-    not identical,
+    f"bitwise-identical={identical}; lambda(cool)={lam_lo:.4f}, "
+    f"lambda(T_critical={ume.T_critical:.1f})={lam_hi:.4f}",
+    (not identical) and lam_hi == 0.0 and lam_lo > 0.0,
 )
 
 # ---------------------------------------------------------------- P4
@@ -156,7 +223,7 @@ except Exception as e:
 try:
     from core.engine import Engine
     from run_engine import MockGGUF
-    eng = Engine(d=64, rank=8, seed=42)
+    eng = Engine(d=64, rank=8, seed=42, monitor=FixedTemp(BENCH_TEMP))
     eng.set_gguf_engine(MockGGUF(logit_variance=0.90))
     statuses = [eng.step()["status"] for _ in range(20)]
     n_success = statuses.count("success")
@@ -173,7 +240,7 @@ try:
     # ANTI-VACUITY. A gate that passes everything is not a gate. Drive the
     # Fisher input across the registered 0.85 threshold in both directions.
     def run_at(lv):
-        e = Engine(d=64, rank=8, seed=42)
+        e = Engine(d=64, rank=8, seed=42, monitor=FixedTemp(BENCH_TEMP))
         e.set_gguf_engine(MockGGUF(logit_variance=lv))
         return [e.step()["status"] for _ in range(10)]
 
@@ -193,9 +260,13 @@ except Exception as e:
 
 # ---------------------------------------------------------------- summary
 print("\n" + "=" * 68)
-fails = [r for r in RESULTS if not r[4]]
-for pid, claim, _, _, ok in RESULTS:
-    print(f"  {pid}  {'MATCH   ' if ok else 'MISMATCH'}  {claim}")
-print(f"\n{len(RESULTS) - len(fails)}/{len(RESULTS)} predictions matched.")
+blocked = [r for r in RESULTS if r[5]]
+fails = [r for r in RESULTS if not r[4] and not r[5]]
+for pid, claim, _, _, ok, blk in RESULTS:
+    v = "BLOCKED " if blk else ("MATCH   " if ok else "MISMATCH")
+    print(f"  {pid:<4} {v}  {claim}")
+tested = len(RESULTS) - len(blocked)
+print(f"\n{tested - len(fails)}/{tested} predictions matched"
+      + (f" ({len(blocked)} blocked, not tested)." if blocked else "."))
 print("=" * 68)
 sys.exit(1 if fails else 0)

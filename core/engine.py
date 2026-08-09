@@ -75,6 +75,8 @@ class Engine:
         pre_gate_config: Optional[Dict[str, Any]] = None,
         transfer_controller_config: Optional[Dict[str, Any]] = None,
         seed: Optional[int] = None,
+        scar_alpha: float = 0.01,
+        monitor=None,
     ):
         """
         Initialize the engine with all Phase 1 + Phase 2 components.
@@ -90,12 +92,13 @@ class Engine:
         """
         
         # ===== Phase 1: Core Components =====
+        self.scar_alpha = scar_alpha
         self.sic = ScarredIdentityChronicle(d=d, rank=rank, seed=seed)
-        self.veritas_gate = VeritasGate()
+        self.veritas_gate = VeritasGate(monitor=monitor)
         self.vest = VEST(d=d, rank=rank)
         self.sma = SlimeMoldOptimizer(num_agents=10, param_dim=4)
         self.ume = UmbraManifoldEngine(d=d, rank=rank, T_critical=0.5)
-        self.hardware_link = HardwareLink()
+        self.hardware_link = HardwareLink(monitor=monitor)
         
         # ===== Phase 2: Governance Components =====
         self.cryst_memory = CrystallizationMemory(window_size=cryst_memory_window)
@@ -225,6 +228,16 @@ class Engine:
                     topological_strain=commit_gate_report.get("topology_strain", 0.0),
                     was_rejected=True,
                 )
+                if scar_report.get("rejection_reason") == "gibbs_refused":
+                    # Not a failure: the Gibbs mandate refused the transition
+                    # and the operator was rolled back.
+                    report["status"] = "rejected_by_gibbs"
+                    self.step_log.append(report)
+                    logger.debug(
+                        f"[Cycle {self.cycle_count}] Gibbs refused: "
+                        f"dG={scar_report.get('gibbs', {}).get('dG')}"
+                    )
+                    return report
                 report["status"] = "sic_update_failed"
                 self.step_log.append(report)
                 logger.warning(f"[Cycle {self.cycle_count}] SIC.update() failed after Commit Gate passed")
@@ -456,13 +469,32 @@ class Engine:
             text = gguf_result.get("text", "")
             x = self._text_to_manifold_vector(text)
             
-            # Update SIC
-            success = self.sic.update(x, alpha=0.01)
-            
+            # GIBBS MANDATE (state-dependent). Snapshot, apply the proposed
+            # scar, measure the real dH/dS it produced, and roll back if
+            # dG >= 0. This is the admission test that evaluate()'s
+            # constant-coefficient path structurally could not perform.
+            U_before = self.sic.U.copy()
+            V_before = self.sic.V.copy()
+            scars_before = self.sic.scars_admitted
+
+            success = self.sic.update(x, alpha=self.scar_alpha)
+
+            gibbs = self.veritas_gate.admit_transition(
+                U_before, V_before, self.sic.U, self.sic.V
+            )
+            if success and not gibbs["admit"]:
+                # Symplectic rollback: restore the pre-scar operator exactly.
+                self.sic.U = U_before
+                self.sic.V = V_before
+                self.sic.scars_admitted = scars_before
+                success = False
+
             report = {
                 "success": success,
                 "text_len": len(text),
                 "scars_total": self.sic.scars_admitted,
+                "gibbs": gibbs,
+                "rejection_reason": None if success else "gibbs_refused",
                 "ok": True,
             }
             
