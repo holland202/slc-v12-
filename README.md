@@ -52,17 +52,27 @@ python3 probe_commit_gate_checks.py  # P9: can each Commit Gate check refuse?
 ### Wiring a real model
 
 ```bash
-pip install llama-cpp-python --break-system-packages
-python3 core/gguf_engine.py                              # 7/7 scoring checks
-python3 calibrate_gguf_threshold.py /path/to/model.gguf  # measure, then set
+# llama.cpp HTTP server -- the working path on Termux/aarch64
+llama-server -m model.gguf --host 127.0.0.1 --port 8080 -c 2048 &
+python3 core/llama_server_engine.py                      # 6/6 client checks
+python3 calibrate_gguf_threshold.py http://127.0.0.1:8080
 ```
+
+**On Android/Termux, use the server backend.** `llama-cpp-python` installs but
+its bundled shared library is not built for aarch64, so importing it raises
+`RuntimeError: Unsupported platform`. `core/llama_server_engine.py` talks to a
+local `llama-server` over HTTP with stdlib `urllib` only — no bindings, no
+compilation. It parses both of llama.cpp's per-token probability shapes
+(`top_logprobs` and legacy `probs`) and returns `success=False` with an explicit
+error if it recognises neither, rather than falling through to a score of zero:
+a parse failure and an unconfident model are different events.
 
 ```python
 from core.engine import Engine
-from core.gguf_engine import GGUFEngine
+from core.llama_server_engine import LlamaServerEngine
 
 engine = Engine(d=64, rank=8, seed=42)
-engine.set_gguf_engine(GGUFEngine(model_path="model.gguf"))
+engine.set_gguf_engine(LlamaServerEngine("http://127.0.0.1:8080"))
 ```
 
 `GGUFEngine` returns a token-confidence score in `[0, 1]` computed from real
@@ -77,8 +87,10 @@ makes that gate meaningful on your model, and the script says so instead of
 picking a number. Changing the threshold means re-running
 `probe_slc_claims.py` so P8 re-proves the flip at the new value.
 
-Verified in this repo: the scoring layer, 7/7, with a sabotage run exiting 1.
-**Not verified: integration against an actual GGUF.** No model has been loaded.
+Verified in this repo: the scoring layer 7/7, and the HTTP client 6/6 against a
+local server returning both response shapes — both with sabotage runs exiting 1.
+**Not verified: integration against an actual GGUF.** No model has been loaded
+in either verification environment.
 
 Each probe prints its **expected** value beside its **measured** value. Verdicts are
 `MATCH`, `MISMATCH`, or `BLOCKED` — the last meaning the instrument could not

@@ -83,10 +83,16 @@ class GGUFEngine:
             raise ValueError(f"metric must be one of {METRICS}, got {metric!r}")
         try:
             from llama_cpp import Llama
-        except ImportError as e:
+        except Exception as e:
+            # NOT just ImportError. On Termux/aarch64 llama-cpp-python imports
+            # fine and then raises RuntimeError("Unsupported platform") from
+            # its own shared-library loader, which the narrower except missed
+            # and turned into a raw traceback. Measured on an S25 Ultra.
             raise RuntimeError(
-                "llama-cpp-python is not installed. "
-                "pip install llama-cpp-python --break-system-packages"
+                f"llama-cpp-python unusable here ({type(e).__name__}: {e}). "
+                "On Android/Termux the bundled shared library is not built "
+                "for aarch64 — use core.llama_server_engine.LlamaServerEngine "
+                "against a local llama-server instead."
             ) from e
 
         self.metric = metric

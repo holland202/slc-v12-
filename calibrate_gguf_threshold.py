@@ -6,7 +6,8 @@ The Commit Gate admits when logit_variance >= fisher_threshold (default 0.85).
 That default was chosen against MockGGUF, which returned a constant. It has
 never met a real model. Run this before wiring GGUFEngine into the loop.
 
-    python3 calibrate_gguf_threshold.py /path/to/model.gguf
+    llama-server -m model.gguf --host 127.0.0.1 --port 8080 -c 2048 &
+    python3 calibrate_gguf_threshold.py http://127.0.0.1:8080
     python3 calibrate_gguf_threshold.py /path/to/model.gguf --metric one_minus_norm_entropy
 
 What it does: runs a fixed prompt set at temperature 0 (the confident arm) and
@@ -41,10 +42,25 @@ PROMPTS = [
 ]
 
 
-def arm(model_path, metric, temperature, max_tokens, label):
+def make_engine(model_path, metric, temperature, backend):
+    if backend == "server":
+        from core.llama_server_engine import LlamaServerEngine
+        eng = LlamaServerEngine(base_url=model_path, metric=metric,
+                                temperature=temperature)
+        ok, msg = eng.health()
+        if not ok:
+            raise RuntimeError(
+                f"no llama-server at {model_path} ({msg}). Start it with:\n"
+                f"  llama-server -m /path/to/model.gguf --host 127.0.0.1 "
+                f"--port 8080 -c 2048")
+        return eng
     from core.gguf_engine import GGUFEngine
-    eng = GGUFEngine(model_path=model_path, metric=metric,
-                     temperature=temperature, verbose=False)
+    return GGUFEngine(model_path=model_path, metric=metric,
+                      temperature=temperature, verbose=False)
+
+
+def arm(model_path, metric, temperature, max_tokens, label, backend="server"):
+    eng = make_engine(model_path, metric, temperature, backend)
     scores, fails = [], 0
     for p in PROMPTS:
         r = eng.generate(prompt=p, max_tokens=max_tokens, logprobs=True)
@@ -67,7 +83,12 @@ def describe(name, xs):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("model_path")
+    ap.add_argument("model_path", help="llama-server base URL (default "
+                    "backend), or a .gguf path with --backend bindings")
+    ap.add_argument("--backend", default="server",
+                    choices=("server", "bindings"),
+                    help="server = llama.cpp HTTP (works on Termux); "
+                         "bindings = llama-cpp-python (broken on aarch64)")
     ap.add_argument("--metric", default="mean_token_prob",
                     choices=("mean_token_prob", "one_minus_norm_entropy"))
     ap.add_argument("--max-tokens", type=int, default=24)
@@ -79,9 +100,9 @@ def main():
     print(f"prompts: {len(PROMPTS)}\n")
 
     print("CONFIDENT ARM (temperature 0.0)")
-    conf, cf = arm(a.model_path, a.metric, 0.0, a.max_tokens, "conf")
+    conf, cf = arm(a.model_path, a.metric, 0.0, a.max_tokens, "conf", a.backend)
     print("\nUNCERTAIN ARM (temperature 1.2)")
-    unc, uf = arm(a.model_path, a.metric, 1.2, a.max_tokens, "unc ")
+    unc, uf = arm(a.model_path, a.metric, 1.2, a.max_tokens, "unc ", a.backend)
 
     print("\n" + "=" * 64)
     print(describe("confident", conf))
