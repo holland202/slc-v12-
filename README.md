@@ -46,6 +46,7 @@ python3 demo.py              # paced walkthrough, ~2 min (--fast to skip pauses)
 python3 probe_slc_claims.py  # 10 registered predictions, exit 1 on any mismatch
 python3 run_engine.py 20     # 20 cycles of the 10-step governance loop
 python3 run_all_tests.py     # thermal suites
+python3 probe_commit_gate_checks.py  # P9: can each Commit Gate check refuse?
 ```
 
 ### Wiring a real model
