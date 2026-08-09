@@ -20,6 +20,17 @@
   <em>Identity as irreversible geometric deformation. Memory as path-dependent operator evolution.</em>
 </p>
 
+## What this is for
+
+**SLC is admission control between a language model's output and the system's persistent memory.** It does not generate text and contains no model. It decides one thing: *is this output allowed to change what the system is?*
+
+Run a local model on an edge device and let its outputs accumulate into persistent state, and the state drifts. Bad outputs compound. Nothing distinguishes a confident answer from a plausible-sounding wrong one before it is written. SLC is the gate on that write path.
+
+The system's identity is a low-rank operator (`U`, `V`). Every accepted output writes an irreversible rank-1 update into it. Before any write lands it must clear, in order: thermal state, a pre-inference risk score, a confidence threshold on the model's own token logprobs, and a free-energy check that rolls the update back if it costs more than it gains. Anything that fails is refused and the operator is untouched. A thermal governor throttles exploration as the substrate heats, so the runtime does not cook the device it lives on.
+
+**Honest scope.** The gates are demonstrated; what they gate is up to you. `run_engine.py` ships with a deterministic mock backend so the governance path can be audited without a model present. To use a real one, see [Wiring a real model](#wiring-a-real-model) below — and calibrate the commit threshold first, because the default was set against that mock.
+
+
 <p align="center">
   <img src="docs/images/slc_architecture.png" width="100%" alt="SLC System Architecture">
 </p>
@@ -37,16 +48,55 @@ python3 run_engine.py 20     # 20 cycles of the 10-step governance loop
 python3 run_all_tests.py     # thermal suites
 ```
 
-Each probe prints its **expected** value beside its **measured** value. Verdicts are `MATCH`, `MISMATCH`, or `BLOCKED` — the last meaning the instrument could not execute, which is not the same result as a prediction being wrong.
+### Wiring a real model
+
+```bash
+pip install llama-cpp-python --break-system-packages
+python3 core/gguf_engine.py                              # 7/7 scoring checks
+python3 calibrate_gguf_threshold.py /path/to/model.gguf  # measure, then set
+```
+
+```python
+from core.engine import Engine
+from core.gguf_engine import GGUFEngine
+
+engine = Engine(d=64, rank=8, seed=42)
+engine.set_gguf_engine(GGUFEngine(model_path="model.gguf"))
+```
+
+`GGUFEngine` returns a token-confidence score in `[0, 1]` computed from real
+per-token logprobs — either `mean_token_prob` or `1 - H/H_max` over the top-k
+distribution. It is carried in the field named `logit_variance` because the
+Engine and TransferController already read that key; **the name is inherited and
+wrong** — higher means more confident, and it is not Fisher information.
+
+`calibrate_gguf_threshold.py` runs your model at temperature 0 and 1.2 and
+reports whether the two distributions separate. If they overlap, no threshold
+makes that gate meaningful on your model, and the script says so instead of
+picking a number. Changing the threshold means re-running
+`probe_slc_claims.py` so P8 re-proves the flip at the new value.
+
+Verified in this repo: the scoring layer, 7/7, with a sabotage run exiting 1.
+**Not verified: integration against an actual GGUF.** No model has been loaded.
+
+Each probe prints its **expected** value beside its **measured** value. Verdicts are
+`MATCH`, `MISMATCH`, or `BLOCKED` — the last meaning the instrument could not
+execute, which is not the same result as a prediction being wrong.
 
 **It currently reports 8/10 on the author's device, and that is the honest number.**
 
-- **P0 fails.** The defense profile caps at 36.5 °C. This Galaxy S25 runs 39 °C actively cooled, ~45 °C idle, and 65 °C under load. The hardware cannot run the profile. Registered as a substrate claim so it cannot quietly disappear.
-- **P1b fails.** `VeritasGate.evaluate()`'s constant-coefficient path cannot refuse at any reachable temperature, and `run_slc.py` still uses it. Left unmigrated on purpose, and registered rather than hidden.
+- **P0 fails.** The defense profile caps at 36.5 °C. This Galaxy S25 runs 39 °C
+  actively cooled, ~45 °C idle, and 65 °C under load. The hardware cannot run the
+  profile. Registered as a substrate claim so it cannot quietly disappear.
+- **P1b fails.** `VeritasGate.evaluate()`'s constant-coefficient path cannot refuse
+  at any reachable temperature, and `run_slc.py` still uses it. Left unmigrated on
+  purpose, and registered rather than hidden.
 
-Reproducibility: `||U @ V.T|| = 2.247657e+00` across seven consecutive runs, including two with `PYTHONHASHSEED` forced random.
+Reproducibility: `||U @ V.T|| = 2.247657e+00` across seven consecutive runs,
+including two with `PYTHONHASHSEED` forced random.
 
-Full write-up, including the defects found and the two claims that were refuted and then fixed: [`FINDINGS_SLC_ENGINE.md`](FINDINGS_SLC_ENGINE.md).
+Full write-up, including the defects found and the two claims that were refuted
+and then fixed: [`FINDINGS_SLC_ENGINE.md`](FINDINGS_SLC_ENGINE.md).
 
 ---
 
