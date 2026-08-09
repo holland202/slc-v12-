@@ -6,7 +6,7 @@ to read SIC state without deep coupling.
 """
 
 import numpy as np
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 import logging
 
 logger = logging.getLogger("slc.sic")
@@ -20,13 +20,19 @@ class ScarredIdentityChronicle:
     Phase 2 Enhancement: Added get_state_for_gate() for governance layer integration.
     """
 
-    def __init__(self, d: int = 512, rank: int = 64, spectral_bound: float = 3.0):
+    def __init__(self, d: int = 512, rank: int = 64, spectral_bound: float = 3.0,
+                 seed: Optional[int] = None):
         self.d = d
         self.rank = rank
         self.spectral_bound = spectral_bound
         
         # Initialize U on Stiefel Manifold (Orthogonal Columns)
-        U_init = np.random.randn(d, rank)
+        # SEED (2026-08-09): U and V were drawn from the global RNG, so
+        # ||U@V.T|| differed on every run — 2.428909 in container, 2.235383 and
+        # 2.255300 on two device runs. A reproducibility claim needs a fixed
+        # draw. seed=None keeps the old unseeded behaviour.
+        rng = np.random.default_rng(seed) if seed is not None else np.random
+        U_init = rng.standard_normal((d, rank)) if seed is not None else np.random.randn(d, rank)
         Q, _ = np.linalg.qr(U_init)
         self.U = Q.astype(np.float32)
         # FIX C (root cause of the null manifold): V was initialized to zeros
@@ -35,7 +41,8 @@ class ScarredIdentityChronicle:
         # exactly 0.0 while scars_admitted counted up. The shipped
         # core/sic.py (SICManifold) initializes BOTH factors randomly; this
         # matches that, rather than inventing a new rule.
-        self.V = (np.random.randn(d, rank) * 0.1).astype(np.float32)
+        self.V = ((rng.standard_normal((d, rank)) if seed is not None
+                   else np.random.randn(d, rank)) * 0.1).astype(np.float32)
 
         self.mu = np.zeros(d, dtype=np.float32)
         self.scars_admitted = 0

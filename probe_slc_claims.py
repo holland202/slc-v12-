@@ -119,10 +119,11 @@ record(
 # writes scars through. Does a "successful" scar change the manifold?
 try:
     from core.sic_enhanced import ScarredIdentityChronicle
-    esic = ScarredIdentityChronicle(d=64, rank=8)
+    esic = ScarredIdentityChronicle(d=64, rank=8, seed=42)
     U_before = esic.U.copy()
     V_before = esic.V.copy()
-    admitted = [esic.update(np.random.randn(64).astype(np.float32), alpha=0.01)
+    _prng = np.random.default_rng(42)
+    admitted = [esic.update(_prng.standard_normal(64).astype(np.float32), alpha=0.01)
                 for _ in range(50)]
     dU = float(np.linalg.norm(esic.U - U_before))
     dV = float(np.linalg.norm(esic.V - V_before))
@@ -155,7 +156,7 @@ except Exception as e:
 try:
     from core.engine import Engine
     from run_engine import MockGGUF
-    eng = Engine(d=64, rank=8)
+    eng = Engine(d=64, rank=8, seed=42)
     eng.set_gguf_engine(MockGGUF(logit_variance=0.90))
     statuses = [eng.step()["status"] for _ in range(20)]
     n_success = statuses.count("success")
@@ -172,7 +173,7 @@ try:
     # ANTI-VACUITY. A gate that passes everything is not a gate. Drive the
     # Fisher input across the registered 0.85 threshold in both directions.
     def run_at(lv):
-        e = Engine(d=64, rank=8)
+        e = Engine(d=64, rank=8, seed=42)
         e.set_gguf_engine(MockGGUF(logit_variance=lv))
         return [e.step()["status"] for _ in range(10)]
 

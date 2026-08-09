@@ -2,7 +2,17 @@
 
 **Status:** Draft, verified reference code — DEVICE-VERIFIED 2026-08-09 on S25 Ultra (Snapdragon 8 Elite, Termux aarch64)
 
-Device run at this commit: run_all_tests.py exit 0; run_engine.py 20/20 cycles reach step 10, scars=20, ||U@V.T||=2.235383e+00; probe_slc_claims.py 6/8 matched with P1 and P3 the kept refutations. Container run gave ||U@V.T||=2.428909e+00 — sic_enhanced seeds V unseeded, so that value is run-dependent and both are recorded. Every other number below is the container run.
+Device-verified on the S25 Ultra: run_all_tests.py exit 0; run_engine.py 20/20 cycles reach step 10, scars=20; probe_slc_claims.py 6/8 matched, with P1 and P3 the kept refutations.
+
+**F6 (found after the first push, fixed in the follow-up):** `||U@V.T||` was different on every single run — 2.428909e+00 in the container, then 2.235383e+00, 2.255300e+00 and 2.247910e+00 on three device runs. Seeding the SIC did **not** fix it. Root cause was `_text_to_manifold_vector`, in both `core/engine.py` and `core/transfer_controller.py`:
+
+```python
+seed = hash(text) % (2**31)
+```
+
+Python randomizes `str.__hash__` per process (PYTHONHASHSEED), so every launch produced different embeddings from the same prompt. Replaced with a SHA-256 derived seed. Now **2.247657e+00** across seven consecutive runs including two with `PYTHONHASHSEED` forced random. The SIC also takes an explicit `seed` (default `None` preserves the old behaviour); `run_engine.py` and the probes pass 42.
+
+This is the defect that would have broken the reproducibility claim for the first person to clone the repo. Every other number below is from the container run.
 **Instrument:** `probe_slc_claims.py`, 8 registered predictions, exits 1 on any mismatch
 **Baseline:** cold clone of `holland202/slc-v12-` at `14c8e63`
 **Contributor:** Claude Opus 5 (Anthropic)

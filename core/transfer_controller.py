@@ -14,6 +14,7 @@ All checks must pass (AND logic). Any failure → rejection + detailed log.
 No LLM output ever writes directly to SIC.
 """
 
+import hashlib
 import numpy as np
 from typing import Dict, Tuple, Optional, Any
 from dataclasses import dataclass
@@ -349,7 +350,12 @@ class TransferController:
         Returns:
             np.ndarray of shape (dim,)
         """
-        seed = hash(text) % (2**31)
+        # REPRODUCIBILITY FIX (2026-08-09): was hash(text), and Python
+        # randomizes str hashing per process (PYTHONHASHSEED). Every launch
+        # produced different embeddings, so ||U@V.T|| differed on every run
+        # (2.428909 container, 2.235383 / 2.255300 / 2.247910 on device).
+        # hashlib is stable across processes and machines.
+        seed = int.from_bytes(hashlib.sha256(text.encode()).digest()[:4], "big") % (2**31)
         rng = np.random.RandomState(seed)
         vector = rng.randn(dim)
         vector /= np.linalg.norm(vector) + 1e-10

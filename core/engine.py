@@ -11,6 +11,7 @@ Key Invariant:
   This is the one-way crystallization membrane.
 """
 
+import hashlib
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 import logging
@@ -73,6 +74,7 @@ class Engine:
         cryst_memory_window: int = 20,
         pre_gate_config: Optional[Dict[str, Any]] = None,
         transfer_controller_config: Optional[Dict[str, Any]] = None,
+        seed: Optional[int] = None,
     ):
         """
         Initialize the engine with all Phase 1 + Phase 2 components.
@@ -88,7 +90,7 @@ class Engine:
         """
         
         # ===== Phase 1: Core Components =====
-        self.sic = ScarredIdentityChronicle(d=d, rank=rank)
+        self.sic = ScarredIdentityChronicle(d=d, rank=rank, seed=seed)
         self.veritas_gate = VeritasGate()
         self.vest = VEST(d=d, rank=rank)
         self.sma = SlimeMoldOptimizer(num_agents=10, param_dim=4)
@@ -554,7 +556,12 @@ class Engine:
         if dim is None:
             dim = self.sic.d
         
-        seed = hash(text) % (2**31)
+        # REPRODUCIBILITY FIX (2026-08-09): was hash(text), and Python
+        # randomizes str hashing per process (PYTHONHASHSEED). Every launch
+        # produced different embeddings, so ||U@V.T|| differed on every run
+        # (2.428909 container, 2.235383 / 2.255300 / 2.247910 on device).
+        # hashlib is stable across processes and machines.
+        seed = int.from_bytes(hashlib.sha256(text.encode()).digest()[:4], "big") % (2**31)
         rng = np.random.RandomState(seed)
         vector = rng.randn(dim).astype(np.float32)
         vector /= np.linalg.norm(vector) + 1e-10

@@ -45,7 +45,7 @@ def main():
     cycles = int(sys.argv[1]) if len(sys.argv) > 1 else 20
     sector = sys.argv[2] if len(sys.argv) > 2 else "defense"
 
-    engine = Engine(d=64, rank=8)
+    engine = Engine(d=64, rank=8, seed=42)
     engine.veritas_gate = type(engine.veritas_gate)(sector=sector)
     engine.set_gguf_engine(MockGGUF())
 
