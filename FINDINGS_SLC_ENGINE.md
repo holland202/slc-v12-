@@ -268,3 +268,34 @@ Existing gates unaffected: `run_all_tests.py` → `ALL SUITES PASSED`, exit 0.
 Build it the way P8 is built — sweep one input per check across its threshold and
 assert the flip. Any check with no refusing input is a Type-A inert gate and should
 be removed or given a real bound, not left as a passing line in an audit report.
+
+
+---
+
+## F7 — the Commit Gate confidence threshold has zero discriminative power on a real model
+
+First calibration against an actual GGUF. TinyLlama-1.1B-Q4_K_M via llama-server on the S25 Ultra, 8 prompts x 2 arms (temperature 0.0 and 1.2), 57-66 tok/s eval.
+
+```
+paired by prompt: 6 wins, 1 tie, 1 loss
+  win   conf 0.4627  unc 0.2343  The capital of France is
+  win   conf 0.6630  unc 0.3311  2 + 2 =
+  win   conf 0.4966  unc 0.2667  Water boils at 100 degrees
+  win   conf 0.6014  unc 0.4391  The first three prime numbers are
+  tie   conf 0.9093  unc 0.9093  Complete the sequence: 1, 2, 3,
+  LOSS  conf 0.4849  unc 0.6683  A triangle has how many sides?
+  win   conf 0.5507  unc 0.2298  The opposite of hot is
+  win   conf 0.5922  unc 0.2410  Name a primary color:
+
+sign test (one-sided): p = 0.0625 over 7 non-tied pairs — NOT significant
+current 0.850: 1/8 confident commit, 1/8 uncertain commit, J = +0.000
+best    0.440: 8/8 confident commit, 2/8 uncertain commit, J = +0.750
+```
+
+The 0.85 threshold was chosen against MockGGUF, which returned a constant. Against a real model it admits good and bad generations at the same rate. A gate that refuses almost everything is as inert as one that refuses nothing — the mirror image of the ΔG defect, reached from the opposite direction.
+
+**Threshold NOT changed.** p = 0.0625 at n = 7 is suggestive, not significant, and eight prompts is too few to set a production value. Registered as measured; the fix is more prompts, not a new number.
+
+The tie and the loss both explain themselves. The sequence prompt produced byte-identical output at both temperatures — deterministic enough that sampling changed nothing. The triangle inversion was degenerate repetition, 'A. B. C. D. E.', which is highly predictable once started: the metric correctly scored a confident model producing garbage. **Confidence is not correctness.** The other four Commit Gate checks are what bound that damage.
+
+**Second instrument defect of the day.** The calibrator originally compared min(confident) to max(uncertain) and reported 'the arms OVERLAP, no threshold works' — a worst-case bound over 8 samples that one tie and one inversion destroyed, while the paired view showed clear separation. Rewritten to paired comparison, sign test, and a Youden-J sweep, and it now distinguishes 'no threshold separates' from 'the arms separate but yours is inert'. Same family as the live-thermometer probes: the instrument was wrong, not the system.

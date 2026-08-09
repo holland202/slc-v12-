@@ -25,6 +25,7 @@ honest move is to record the measured separation and set the threshold from it
 — then re-run probe_slc_claims.py so P8 re-proves the flip at the NEW value.
 """
 import argparse
+import math
 import statistics
 import sys
 
@@ -109,34 +110,85 @@ def main():
     print(describe("uncertain", unc))
 
     if not conf or not unc:
-        print("\nVERDICT: could not measure. Backend failures: "
+        print(f"\nVERDICT: could not measure. Backend failures: "
               f"{cf} confident, {uf} uncertain.")
         return 2
 
-    gap = min(conf) - max(unc)
-    print(f"\nseparation (min confident - max uncertain): {gap:+.4f}")
+    # ---------------- PAIRED analysis ----------------
+    # CORRECTION (2026-08-09): the first version of this script compared
+    # min(confident) to max(uncertain) and declared OVERLAP if they crossed.
+    # That is a worst-case bound over a handful of samples: on TinyLlama one
+    # tie and one inversion made it report "no threshold works" when the
+    # paired data showed 6 wins, 1 tie, 1 loss. Same prompt, both
+    # temperatures, is the comparison that carries information.
+    pairs = list(zip(PROMPTS, conf, unc))
+    wins = sum(1 for _, c, u in pairs if c > u)
+    losses = sum(1 for _, c, u in pairs if c < u)
+    ties = len(pairs) - wins - losses
+    print(f"\npaired by prompt: {wins} wins, {ties} ties, {losses} losses")
+    for pr, c, u in pairs:
+        mark = "win " if c > u else ("tie " if c == u else "LOSS")
+        print(f"  {mark}  conf {c:.4f}  unc {u:.4f}  {pr!r}")
 
-    if gap > 0:
-        suggested = round(max(unc) + gap / 2, 3)
-        print(f"VERDICT: the arms SEPARATE. A threshold anywhere in "
-              f"({max(unc):.4f}, {min(conf):.4f}) discriminates. "
-              f"Midpoint: {suggested}")
+    n_eff = wins + losses
+    pval = (sum(math.comb(n_eff, k) for k in range(wins, n_eff + 1)) / 2 ** n_eff
+            if n_eff else 1.0)
+    print(f"\nsign test (one-sided): p = {pval:.4f} over {n_eff} non-tied pairs")
+    if pval > 0.05:
+        print("  NOT significant at this sample size. Treat any threshold "
+              "below as provisional and re-run with more prompts.")
+
+    # ---------------- threshold sweep ----------------
+    best = None
+    for i in range(1001):
+        th = i / 1000.0
+        tp = sum(1 for x in conf if x >= th)
+        fp = sum(1 for x in unc if x >= th)
+        J = tp / len(conf) - fp / len(unc)
+        if best is None or J > best[1]:
+            best = (th, J, tp, fp)
+    th, J, tp, fp = best
+    cur = a.current_threshold
+    tpc = sum(1 for x in conf if x >= cur)
+    fpc = sum(1 for x in unc if x >= cur)
+    Jc = tpc / len(conf) - fpc / len(unc)
+
+    print(f"\nthreshold sweep (Youden J = TPR - FPR):")
+    print(f"  current {cur:.3f}: {tpc}/{len(conf)} confident commit, "
+          f"{fpc}/{len(unc)} uncertain commit, J = {Jc:+.3f}")
+    print(f"  best    {th:.3f}: {tp}/{len(conf)} confident commit, "
+          f"{fp}/{len(unc)} uncertain commit, J = {J:+.3f}")
+
+    print("\n" + "-" * 64)
+    if J <= 0.0:
+        print("VERDICT: NO threshold separates the arms on this model. The "
+              "metric is not measuring confidence here. That is a finding, "
+              "not a tuning problem -- try --metric one_minus_norm_entropy "
+              "before concluding the gate is unusable.")
+        rc = 1
+    elif Jc <= 0.0:
+        print(f"VERDICT: the arms SEPARATE (best J = {J:+.3f} at {th:.3f}), but "
+              f"the CURRENT threshold {cur:.3f} has J = {Jc:+.3f} -- it "
+              f"discriminates nothing on this model. It admits "
+              f"{tpc}/{len(conf)} good generations and {fpc}/{len(unc)} bad "
+              f"ones. A gate set here refuses almost everything, which is the "
+              f"mirror image of a gate that refuses nothing. Both are inert.")
+        rc = 1
     else:
-        print("VERDICT: the arms OVERLAP. On this model the metric does not "
-              "separate confident from uncertain generation, so NO threshold "
-              "makes this gate meaningful. Try --metric "
-              "one_minus_norm_entropy, or treat it as a finding: the Commit "
-              "Gate's check 1 is not measuring what it claims on this model.")
+        print(f"VERDICT: the arms separate and the current threshold "
+              f"{cur:.3f} has J = {Jc:+.3f}. Best available is {J:+.3f} at "
+              f"{th:.3f}.")
+        rc = 0
 
-    inside = sum(1 for x in conf if x >= a.current_threshold)
-    print(f"\nAt the current threshold {a.current_threshold}: "
-          f"{inside}/{len(conf)} confident generations would commit, "
-          f"{sum(1 for x in unc if x >= a.current_threshold)}/{len(unc)} "
-          f"uncertain ones would also commit.")
+    print("\nCONFOUND, read before trusting any number above: this metric "
+          "measures the model's CONFIDENCE, not its CORRECTNESS. Degenerate "
+          "repetition ('A. B. C. D.') is highly predictable and scores HIGH. "
+          "A confident wrong answer commits. The Commit Gate's other four "
+          "checks are what bound the damage.")
     print("If you change the threshold, re-run probe_slc_claims.py so P8 "
           "re-proves the flip at the new value.")
     print("=" * 64)
-    return 0 if gap > 0 else 1
+    return rc
 
 
 if __name__ == "__main__":
