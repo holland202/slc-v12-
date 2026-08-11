@@ -299,3 +299,23 @@ The 0.85 threshold was chosen against MockGGUF, which returned a constant. Again
 The tie and the loss both explain themselves. The sequence prompt produced byte-identical output at both temperatures — deterministic enough that sampling changed nothing. The triangle inversion was degenerate repetition, 'A. B. C. D. E.', which is highly predictable once started: the metric correctly scored a confident model producing garbage. **Confidence is not correctness.** The other four Commit Gate checks are what bound that damage.
 
 **Second instrument defect of the day.** The calibrator originally compared min(confident) to max(uncertain) and reported 'the arms OVERLAP, no threshold works' — a worst-case bound over 8 samples that one tie and one inversion destroyed, while the paired view showed clear separation. Rewritten to paired comparison, sign test, and a Youden-J sweep, and it now distinguishes 'no threshold separates' from 'the arms separate but yours is inert'. Same family as the live-thermometer probes: the instrument was wrong, not the system.
+
+## F8 - Commit Gate threshold calibration at n=30 (TinyLlama-1.1B-Q4_K_M)
+
+2026-08-10, S25 Ultra via llama-server, metric mean_token_prob, max_tokens 24.
+F7 measured n=8 and stands as its own run; this does not supersede it.
+
+Registered before the run:
+
+- P1: one-sided sign test p < 0.05, needing at least 21 wins of 30. PASS - 28 wins, 1 tie, 1 loss, p = 0.0000 over 29 non-tied pairs.
+- P2: best-J threshold falls in 0.40-0.60, i.e. the n=7 estimate of 0.44 survives a tenfold sample. REFUTED (kept) - measured best 0.348, J = +0.733, 28/30 confident commit, 6/30 uncertain commit. The n=7 estimate was carried by two inversions and moved once the sample grew. Do not set a threshold on n below 30.
+- P3: Youden J at the shipped threshold 0.850 stays below 0.20. PASS - J = +0.000, 1/30 confident and 1/30 uncertain commit.
+
+Distributions: confident n=30 min 0.2888 median 0.5107 max 0.9093; uncertain n=30 min 0.1073 median 0.2671 max 0.9093.
+
+Both F7 anomalies reproduced and remain the only non-wins. The sequence prompt tied byte-identical at 0.9093 in both arms - deterministic enough that temperature changed nothing. The triangle prompt inverted (conf 0.4849 vs unc 0.6683) through degenerate repetition of the form A. B. C. D. E., which is highly predictable and therefore scores HIGH. Both were kept in the prompt set deliberately; dropping them would have been selection on outcome.
+
+NOT DONE: fisher_threshold is unchanged at 0.850 in this commit. Moving it to 0.348 requires re-running probe_slc_claims.py so P8 re-proves the flip at the new value.
+
+OPEN, unregistered: an anti-vacuity arm. A control at temperature 0.0 with a different seed is void under greedy decoding - every pair ties. The real control is a prompt class with no determinate answer, testing whether the metric tracks model uncertainty or only decoder temperature. Needs arm() restructured; not yet run.
+
