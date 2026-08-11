@@ -319,3 +319,37 @@ NOT DONE: fisher_threshold is unchanged at 0.850 in this commit. Moving it to 0.
 
 OPEN, unregistered: an anti-vacuity arm. A control at temperature 0.0 with a different seed is void under greedy decoding - every pair ties. The real control is a prompt class with no determinate answer, testing whether the metric tracks model uncertainty or only decoder temperature. Needs arm() restructured; not yet run.
 
+
+
+## Task 2 — Checks 2–5 Verified Inert
+
+Date: 2026-08-11
+Verified by direct code read at 0ff40c7.
+
+| Check # | Name | File:Line | Threshold | Ever Refused? |
+|---|---|---|---|---|
+| 2 | spectral_norm | transfer_controller.py:209 | ||UV^T||_2 <= 2.0 | **No** |
+| 3 | rank_preserved | transfer_controller.py:217 | rank(current) == rank(proposed) | **No** |
+| 4 | geodesic_distance | transfer_controller.py:226 | fro_diff/(1+fro_diff) <= 0.15 | **No** |
+| 5 | thermal_coupling | transfer_controller.py:240 | T_eff >= 0.3 | **No** |
+
+P7 norm clarification: P7 logs np.linalg.norm(eng.sic.U @ eng.sic.V.T) with ord=None (Frobenius). The gate checks np.linalg.norm(manifold_proposed, ord=2) (spectral). These are different norms. Direct measurement on the engine at BENCH_TEMP=30.0, d=64, rank=8, seed=42, after 10 steps: Frobenius=2.252732, Spectral=1.040624. Spectral norm is well below 2.0. Check 2 is **inert**, not broken.
+
+## Task 1 — Held-Out Youden J (n=30, rerun)
+
+Date: 2026-08-11
+Reran calibrate_gguf_threshold.py against live llama-server. Captured to ~/calib_n30_rerun.log. Parsed 60 raw scores. 5-fold CV, numpy only, seed=42.
+
+| Metric | Value |
+|---|---|
+| Apparent J | **+0.7333** at th=0.3535 |
+| 5-fold CV J | **+0.7000 ± 0.1247** |
+| Optimism | **+0.0333** |
+
+Caveats:
+1. P10 interval was [+0.45, +0.70]; measured mean +0.700 lands exactly on the upper bound. Confirm in writing whether P10 was registered *before* the run or treat as post-hoc.
+2. 5-fold CV on 30 pairs = 6 held-out points per fold. J from six points is coarse; optimism is biased *downward*. The +0.033 is a lower bound, not a measurement.
+3. Uncertain arm (temp 1.2) is unseeded; threshold shifted 0.348 (F8) -> 0.3535 (rerun) due to sampling noise.
+
+Retraction: Prior estimate of +0.62/+0.67 from an earlier review was fabricated from a reconstructed dataset and has been retracted. The real held-out J is higher.
+
