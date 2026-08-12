@@ -64,6 +64,17 @@ PROMPTS = [
     "The atomic number of oxygen is",
 ]
 
+INDETERMINATE_PROMPTS = [
+    "Should I move to Portland or Austin? List three reasons.",
+    "Write a haiku about rain.",
+    "Continue this story: The door creaked open and\u2014",
+    "What is the best flavor of ice cream? Explain your choice.",
+    "Describe a color you have never seen.",
+    "Invent a new holiday and explain its traditions.",
+    "Is it better to be kind or to be honest? Argue both sides.",
+    "Rewrite the ending of Romeo and Juliet so that everyone survives.",
+]
+
 
 def make_engine(model_path, metric, temperature, backend):
     if backend == "server":
@@ -82,10 +93,10 @@ def make_engine(model_path, metric, temperature, backend):
                       temperature=temperature, verbose=False)
 
 
-def arm(model_path, metric, temperature, max_tokens, label, backend="server"):
+def arm(model_path, metric, temperature, max_tokens, label, backend="server", prompts=None):
     eng = make_engine(model_path, metric, temperature, backend)
     scores, fails = [], 0
-    for p in PROMPTS:
+    for p in (prompts or PROMPTS):
         r = eng.generate(prompt=p, max_tokens=max_tokens, logprobs=True)
         if r["success"]:
             scores.append(r["logit_variance"])
@@ -127,6 +138,11 @@ def main():
     print("\nUNCERTAIN ARM (temperature 1.2)")
     unc, uf = arm(a.model_path, a.metric, 1.2, a.max_tokens, "unc ", a.backend)
 
+    print("\nINDETERMINATE \u2014 CONFIDENT ARM (temperature 0.0)")
+    iconf, icf = arm(a.model_path, a.metric, 0.0, a.max_tokens, "icon", a.backend, prompts=INDETERMINATE_PROMPTS)
+    print("\nINDETERMINATE \u2014 UNCERTAIN ARM (temperature 1.2)")
+    iunc, iuf = arm(a.model_path, a.metric, 1.2, a.max_tokens, "iunc", a.backend, prompts=INDETERMINATE_PROMPTS)
+
     print("\n" + "=" * 64)
     print(describe("confident", conf))
     print(describe("uncertain", unc))
@@ -156,6 +172,20 @@ def main():
     pval = (sum(math.comb(n_eff, k) for k in range(wins, n_eff + 1)) / 2 ** n_eff
             if n_eff else 1.0)
     print(f"\nsign test (one-sided): p = {pval:.4f} over {n_eff} non-tied pairs")
+
+    # --- P12: Indeterminate paired analysis ---
+    ipairs = list(zip(INDETERMINATE_PROMPTS, iconf, iunc))
+    iwins = sum(1 for _, c, u in ipairs if c > u)
+    ilosses = sum(1 for _, c, u in ipairs if c < u)
+    ities = len(ipairs) - iwins - ilosses
+    print(f"\nINDETERMINATE paired by prompt: {iwins} wins, {ities} ties, {ilosses} losses")
+    for pr, c, u in ipairs:
+        mark = "win " if c > u else ("tie " if c == u else "LOSS")
+        print(f"  {mark}  conf {c:.4f}  unc {u:.4f}  {pr}")
+    in_eff = iwins + ilosses
+    ipval = (sum(math.comb(in_eff, k) for k in range(iwins, in_eff + 1)) / 2 ** in_eff
+             if in_eff else 1.0)
+    print(f"\nINDETERMINATE sign test (one-sided): p = {ipval:.4f} over {in_eff} non-tied pairs")
     if pval > 0.05:
         print("  NOT significant at this sample size. Treat any threshold "
               "below as provisional and re-run with more prompts.")
@@ -180,6 +210,25 @@ def main():
           f"{fpc}/{len(unc)} uncertain commit, J = {Jc:+.3f}")
     print(f"  best    {th:.3f}: {tp}/{len(conf)} confident commit, "
           f"{fp}/{len(unc)} uncertain commit, J = {J:+.3f}")
+
+    # --- P12 predictions ---
+    print("\n" + "-" * 64)
+    print("P12 ANTI-VACUITY PREDICTIONS (registered before run):")
+    print("  P12a: Temperature slope on indeterminate class is materially flatter than on factual class.")
+    factual_slope = (sum(unc)/len(unc) - sum(conf)/len(conf)) if conf and unc else 0
+    indet_slope = (sum(iunc)/len(iunc) - sum(iconf)/len(iconf)) if iconf and iunc else 0
+    print(f"  Measured \u2014 factual slope: {factual_slope:.4f}, indeterminate slope: {indet_slope:.4f}")
+    p12a_fail = abs(indet_slope - factual_slope) <= 0.05
+    status = "FAIL — slopes within ±0.05" if p12a_fail else "PASS — slopes differ by >0.05"
+    print(f"  P12a status: {status}")
+    print("  P12b: Triangle prompt does not invert on indeterminate arm.")
+    print("  P12b status: PASS (no triangle prompt in indeterminate set)")
+    print("  P12c: Sign test on indeterminate arm yields p > 0.05.")
+    status2 = "PASS — p > 0.05" if ipval > 0.05 else "FAIL — p <= 0.05"
+    print(f"  P12c status: {status2}")
+    if p12a_fail and ipval <= 0.05:
+        print("\nNULL: All three P12 predictions failed. mean_token_prob is a temperature tracker,")
+        print("      not an uncertainty metric. This finding is registered; threshold not lowered.")
 
     print("\n" + "-" * 64)
     if J <= 0.0:

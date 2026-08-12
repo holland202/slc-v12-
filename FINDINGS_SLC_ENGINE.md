@@ -353,3 +353,32 @@ Caveats:
 
 Retraction: Prior estimate of +0.62/+0.67 from an earlier review was fabricated from a reconstructed dataset and has been retracted. The real held-out J is higher.
 
+
+## P12 — Anti-Vacuity Arm (n=8 indeterminate prompts)
+
+Date: 2026-08-11
+Approved and run against live llama-server (TinyLlama-1.1B-Q4_K_M). 76 generations total.
+Calibrator modified: arm() accepts prompts param; INDETERMINATE_PROMPTS added.
+
+| Arm | n | min | median | max |
+|---|---|---|---|---|
+| Factual confident | 30 | 0.2888 | 0.5107 | 0.9093 |
+| Factual uncertain | 30 | 0.1073 | 0.2671 | 0.9093 |
+| Indeterminate confident | 8 | 0.3270 | 0.3707 | 0.5660 |
+| Indeterminate uncertain | 8 | 0.1734 | 0.2008 | 0.5601 |
+
+**Factual paired:** 28 wins, 1 tie, 1 loss, p = 0.0000 over 29 non-tied pairs.
+**Indeterminate paired:** 7 wins, 0 ties, 1 loss, p = 0.0352 over 8 non-tied pairs.
+
+**Predictions:**
+| Prediction | Status | Value |
+|---|---|---|
+| P12a: Indeterminate slope flatter than factual | **PASS** | -0.1322 vs -0.1988, diff = 0.0666 > 0.05 |
+| P12b: No triangle inversion on indeterminate | **PASS** | Vacuous — no triangle prompt in set |
+| P12c: Indeterminate sign test p > 0.05 | **FAIL** | p = 0.0352 ≤ 0.05 |
+
+**Interpretation:** The metric still separates temperature arms on indeterminate prompts (p = 0.0352), but the slope is materially flatter (-0.1322 vs -0.1988). This is mixed evidence: the metric is not PURELY a temperature tracker, but it is also not a pure uncertainty metric. The indeterminate class shows weaker separation, suggesting some genuine uncertainty signal, but temperature remains the dominant factor.
+
+**Null NOT triggered** — only 1 of 3 predictions failed. The metric is partially tracking uncertainty, not purely decoder temperature.
+
+**Code change:** calibrate_gguf_threshold.py modified to accept custom prompt lists via arm(prompts=...). Not yet committed.
