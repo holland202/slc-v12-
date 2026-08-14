@@ -321,10 +321,39 @@ OPEN, unregistered: an anti-vacuity arm. A control at temperature 0.0 with a dif
 
 
 
-## Task 2 — Checks 2–5 Verified Inert
+## Task 2 — Checks 2–5: RETRACTED, all four refuse
 
-Date: 2026-08-11
-Verified by direct code read at 0ff40c7.
+Date: 2026-08-11, corrected 2026-08-14.
+
+**RETRACTION.** This section previously read "Checks 2–5 Verified Inert" and was
+sourced, in its own words, "by direct code read at 0ff40c7." That is the defect
+this repo exists to find: a reading presented as a measurement. The registered
+probe for exactly this question — P9, `probe_commit_gate_checks.py` — was already
+tracked in this repo and was not run. It was run on 2026-08-14 and every row of
+the table below was wrong.
+
+```
+check 2 spectral_norm      REFUSES  threshold 2.0; first refusal at delta scale 0.3 (||UV^T||_2 = 8.3842)
+check 3 rank_preserved     REFUSES  scale 0.001 pass; 0.01 pass; 0.1 pass; 1.0 REFUSE
+check 4 geodesic_distance  REFUSES  threshold 0.15; refuses once ||dU||_F+||dV||_F > 0.1765; first refusal at delta scale 0.01 (d=0.2998)
+check 5 thermal_coupling   REFUSES  T_eff = 0.8*exp(-0.5*pressure) vs T_min = 0.3; n=10 pressure=5.000 REFUSE
+
+4/4 non-Fisher checks demonstrated a refusing input.
+```
+
+**P9 is therefore CLOSED and PASSED**, not open. The four non-Fisher checks are
+live gates with wide operating margin — they do not fire during ordinary cycles,
+which is what a well-margined gate should do, and that is not the same as being
+unable to fire. The original error was reading "passes at every input tested"
+as "cannot refuse." Absence of evidence, recorded as evidence of absence.
+
+Three verdicts are needed and are not interchangeable: REFUSES (a refusing input
+was found), NO INPUT FOUND (the search failed — a candidate for inertness, not a
+proof), and STRUCTURAL (provably unable to refuse by arithmetic, e.g. check 4
+would be structurally inert if its threshold were >= 1.0, since f/(1+f) < 1 for
+all f >= 0). Only the third is proof.
+
+The superseded claim, kept:
 
 | Check # | Name | File:Line | Threshold | Ever Refused? |
 |---|---|---|---|---|
@@ -333,7 +362,9 @@ Verified by direct code read at 0ff40c7.
 | 4 | geodesic_distance | transfer_controller.py:226 | fro_diff/(1+fro_diff) <= 0.15 | **No** |
 | 5 | thermal_coupling | transfer_controller.py:240 | T_eff >= 0.3 | **No** |
 
-P7 norm clarification: P7 logs np.linalg.norm(eng.sic.U @ eng.sic.V.T) with ord=None (Frobenius). The gate checks np.linalg.norm(manifold_proposed, ord=2) (spectral). These are different norms. Direct measurement on the engine at BENCH_TEMP=30.0, d=64, rank=8, seed=42, after 10 steps: Frobenius=2.252732, Spectral=1.040624. Spectral norm is well below 2.0. Check 2 is **inert**, not broken.
+P7 norm clarification: P7 logs np.linalg.norm(eng.sic.U @ eng.sic.V.T) with ord=None (Frobenius). The gate checks np.linalg.norm(manifold_proposed, ord=2) (spectral). These are different norms. Direct measurement on the engine at BENCH_TEMP=30.0, d=64, rank=8, seed=42, after 10 steps: Frobenius=2.252732, Spectral=1.040624. Spectral norm is well below 2.0 in ordinary operation, so P7's Frobenius reading
+never indicated a violation. Check 2 is **neither broken nor inert** — it refuses
+at delta scale 0.3, measured above.
 
 ## Task 1 — Held-Out Youden J (n=30, rerun)
 
