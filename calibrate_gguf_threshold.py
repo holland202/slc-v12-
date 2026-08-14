@@ -73,6 +73,28 @@ INDETERMINATE_PROMPTS = [
     "Invent a new holiday and explain its traditions.",
     "Is it better to be kind or to be honest? Argue both sides.",
     "Rewrite the ending of Romeo and Juliet so that everyone survives.",
+    "Write a short poem about a locked door.",
+    "What would you name a newly discovered planet? Explain.",
+    "Describe the smell of a room you have never entered.",
+    "Continue this line: The last train had already left, and",
+    "Which season is best for starting something new? Argue it.",
+    "Invent a word for the feeling of finishing a long project.",
+    "Should a museum charge admission? Make the case either way.",
+    "Describe a piece of music that does not exist.",
+    "What should a city do with an abandoned railway? Propose something.",
+    "Write the opening sentence of a novel set underwater.",
+    "Is it better to travel alone or with others? Take a side.",
+    "Imagine a sport played in low gravity and describe one rule.",
+    "What color should a hospital waiting room be? Justify it.",
+    "Continue this: She opened the letter and immediately",
+    "Invent a superstition and explain where it came from.",
+    "Describe an animal that evolved on a planet with no light.",
+    "Should children learn cursive? Argue both positions.",
+    "Write a two-line farewell note from someone leaving a job.",
+    "What is the most underrated tool in a kitchen? Defend it.",
+    "Describe the texture of a dream you cannot remember.",
+    "Invent a tradition for the first day of winter.",
+    "Would you rather read minds or become invisible? Explain.",
 ]
 
 
@@ -218,11 +240,40 @@ def main():
     factual_slope = (sum(unc)/len(unc) - sum(conf)/len(conf)) if conf and unc else 0
     indet_slope = (sum(iunc)/len(iunc) - sum(iconf)/len(iconf)) if iconf and iunc else 0
     print(f"  Measured \u2014 factual slope: {factual_slope:.4f}, indeterminate slope: {indet_slope:.4f}")
-    p12a_fail = abs(indet_slope - factual_slope) <= 0.05
-    status = "FAIL — slopes within ±0.05" if p12a_fail else "PASS — slopes differ by >0.05"
+    # P12a needs BOTH a gap wider than the band AND a confidence interval on the
+    # indeterminate slope that excludes the factual slope. At n=8 the gap cleared
+    # the band by 0.0166 while the standard error was 0.0498 - the band's full
+    # width - so a bare gap test reported noise as a result. Gap alone is not
+    # enough; the instrument has to be able to tell the two slopes apart.
+    gap = abs(indet_slope - factual_slope)
+    ipairs = [a - b for a, b in zip(iconf, iunc)]
+    ni = len(ipairs)
+    if ni >= 2:
+        mi = sum(ipairs) / ni
+        var = sum((x - mi) ** 2 for x in ipairs) / (ni - 1)
+        se = (var ** 0.5) / (ni ** 0.5)
+    else:
+        se = float("inf")
+    # 1.96 is the large-sample normal quantile; at n<30 this is mildly optimistic
+    # and the interval should be read as approximate.
+    lo, hi = abs(mi) - 1.96 * se, abs(mi) + 1.96 * se
+    excludes = not (lo <= abs(factual_slope) <= hi)
+    print(f"  Indeterminate paired diffs: n={ni}, se={se:.4f}, "
+          f"95% CI [{lo:.4f}, {hi:.4f}]; factual |slope|={abs(factual_slope):.4f}")
+    if gap <= 0.05:
+        status = "FAIL — slopes within ±0.05"
+    elif not excludes:
+        status = (f"UNDECIDED — gap {gap:.4f} clears the band but the CI on the "
+                  f"indeterminate slope contains the factual slope (se={se:.4f}). "
+                  f"Underpowered at n={ni}.")
+    else:
+        status = (f"PASS — gap {gap:.4f} > 0.05 and the CI excludes the factual "
+                  f"slope (se={se:.4f}, {gap/se:.2f} SE)")
     print(f"  P12a status: {status}")
     print("  P12b: Triangle prompt does not invert on indeterminate arm.")
-    print("  P12b status: PASS (no triangle prompt in indeterminate set)")
+    print("  P12b status: VOID — no triangle prompt is in the indeterminate set, "
+          "so no outcome could have failed this prediction. A prediction that can "
+          "only pass is not a prediction. Do not record it as PASS.")
     print("  P12c: Sign test on indeterminate arm yields p > 0.05.")
     status2 = "PASS — p > 0.05" if ipval > 0.05 else "FAIL — p <= 0.05"
     print(f"  P12c status: {status2}")

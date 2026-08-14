@@ -445,7 +445,55 @@ p = 0.0000 be compared against p = 0.0352 across arms: at n=8 nothing below
 0.0039 is reachable, so that gap is denominators, not evidence.
 
 *Open.* Re-run the indeterminate arm at n >= 30 so P12a has the power to decide.
-Unrun.
+RUN 2026-08-14 — see below.
+
+### P12 re-run at n=30 (indeterminate arm expanded 8 -> 30)
+
+Date: 2026-08-14, device. Indeterminate prompt set expanded from 8 to 30. All
+eight originals kept, including the ice-cream prompt that lost at n=8; dropping
+it would have been selection on outcome.
+
+Registered before the run:
+
+- **P12a-30 PASS.** Required BOTH a gap > 0.05 AND a 95% CI on the indeterminate
+  slope that excludes the factual slope. Factual slope -0.1988, indeterminate
+  -0.1270, gap 0.0718. The 30 paired differences give SD 0.1416 and standard
+  error 0.0258, CI [0.0764, 0.1777], which excludes 0.1988. The gap is 2.78 SE.
+  At n=8 the SE was 0.0498 — the full width of the band — and the same nominal
+  gap was noise; at n=30 the instrument can tell the two slopes apart.
+- **P12c-30 REFUTED (kept).** Predicted p > 0.05. Measured 24 wins, 2 ties,
+  4 losses, p = 0.0001 over 28 non-tied pairs. More samples make rejection
+  easier, and it rejected by three further orders of magnitude. No power
+  defence is available for this one in either direction.
+- **P12d (anti-vacuity control) FIRED, partially.** Two nominally open-ended
+  prompts tied byte-identical across both arms: "Write the opening sentence of a
+  novel set underwater" (0.7606 / 0.7606) and "Imagine a sport played in low
+  gravity and describe one rule" (0.6541 / 0.6541). Temperature 1.2 changed
+  nothing on either — the same phenomenon as the sequence prompt in the factual
+  arm. 2 of 30 supposedly indeterminate prompts are deterministic in practice.
+  Recorded, not dropped.
+
+**What the two results say jointly, and it is not what the null predicted.**
+The metric responds to temperature even where no completion is privileged
+(P12c), but measurably *less* strongly than where one is (P12a). So
+mean_token_prob is not purely a decoder-determinism tracker: it carries a real
+uncertainty signal on top of a dominant temperature signal. The null registered
+before P12 — "if the predictions fail, the metric is a temperature tracker" —
+was too strong, and is itself now the thing that failed. Recorded as such rather
+than reinterpreted.
+
+**Instrument change shipped with this run.** P12a's verdict logic previously
+tested the gap alone, which is what let n=8 report PASS on 0.0166 of margin
+against an SE of 0.0498. It now requires the CI to exclude the factual slope and
+prints n, SE and the interval. Replayed against the original 8 pairs it returns
+UNDECIDED; against the 30 it returns PASS — so the guard demonstrably returns
+both verdicts. P12b's hardcoded `PASS (no triangle prompt in indeterminate set)`
+now prints VOID with the reason, since a prediction that cannot fail must not be
+recorded as passing.
+
+*Still open.* The two byte-identical ties suggest the indeterminate set is not
+uniformly indeterminate. Whether the P12a gap survives with those two replaced
+by genuinely non-deterministic prompts is unrun.
 
 The superseded verdicts, kept: P12a PASS ("slopes differ by >0.05"), P12b PASS
 ("no triangle prompt in indeterminate set").
