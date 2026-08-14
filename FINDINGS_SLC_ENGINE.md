@@ -404,9 +404,51 @@ Calibrator modified: arm() accepts prompts param; INDETERMINATE_PROMPTS added.
 **Predictions:**
 | Prediction | Status | Value |
 |---|---|---|
-| P12a: Indeterminate slope flatter than factual | **PASS** | -0.1322 vs -0.1988, diff = 0.0666 > 0.05 |
-| P12b: No triangle inversion on indeterminate | **PASS** | Vacuous — no triangle prompt in set |
-| P12c: Indeterminate sign test p > 0.05 | **FAIL** | p = 0.0352 ≤ 0.05 |
+| P12a: Indeterminate slope flatter than factual | **UNDECIDED** | -0.1322 vs -0.1988, diff = 0.0666. Underpowered — see below |
+| P12b: No triangle inversion on indeterminate | **VOID** | Could not fail; the triangle prompt was never in the set |
+| P12c: Indeterminate sign test p > 0.05 | **REFUTED (kept)** | p = 0.0352 ≤ 0.05 |
+
+**Correction, 2026-08-14.** P12a and P12b were first recorded as PASS/PASS. Both
+records were wrong, and together they are what let the commit message for this
+run read "Null not triggered." The null's status is in fact unknown.
+
+*P12a is UNDECIDED, not PASS.* The eight indeterminate paired differences are
+0.1463, 0.0627, 0.1733, -0.1649, 0.2742, 0.1528, 0.1276, 0.2856. Mean 0.1322,
+SD 0.1410, **standard error 0.0498** — essentially the full width of the +/-0.05
+falsification band the prediction was judged against. A 95% CI on the
+indeterminate slope is [0.0143, 0.2501] and contains the factual slope 0.1988
+comfortably. The measured gap of 0.0666 clears the band by 0.0166, which is a
+third of one standard error. The instrument cannot distinguish these two slopes
+at n=8; declaring PASS on that margin reports noise as a result.
+
+*P12b is VOID, not PASS.* It predicted that the triangle prompt would not invert
+on the indeterminate arm. That prompt was never in the indeterminate set, by
+construction, so no possible outcome could have failed the prediction. A guard
+that can only pass is the exact defect this repo was built to find, and it was
+sitting inside an anti-vacuity experiment. VOID is the honest verdict; it should
+never have been registered in that form.
+
+*Consequence.* P12c stands on its own. It predicted no separation where no
+completion is privileged, and the arms separated (p = 0.0352 over 8 non-tied
+pairs). That still points where the pre-registered null said it would — at
+mean_token_prob tracking decoder determinism rather than model uncertainty — but
+P12a, the magnitude test that would corroborate or contradict it, has not
+actually been run at a usable sample size.
+
+*Two framing errors to avoid when quoting this run.* First, n is 8, not 76. The
+76 is total generations (30x2 + 8x2); the binomial test's denominator is the 8
+non-tied indeterminate pairs. Second, "is the test underpowered?" runs backwards
+as a defence of P12c. At n=8 one-sided the critical region is 7 or 8 wins
+(p = 0.0352 and 0.0039); 6 wins gives 0.1445. Small n makes rejection harder, and
+it rejected anyway, so the rejection cannot be attributed to low power. Nor should
+p = 0.0000 be compared against p = 0.0352 across arms: at n=8 nothing below
+0.0039 is reachable, so that gap is denominators, not evidence.
+
+*Open.* Re-run the indeterminate arm at n >= 30 so P12a has the power to decide.
+Unrun.
+
+The superseded verdicts, kept: P12a PASS ("slopes differ by >0.05"), P12b PASS
+("no triangle prompt in indeterminate set").
 
 **Interpretation:** The metric still separates temperature arms on indeterminate prompts (p = 0.0352), but the slope is materially flatter (-0.1322 vs -0.1988). This is mixed evidence: the metric is not PURELY a temperature tracker, but it is also not a pure uncertainty metric. The indeterminate class shows weaker separation, suggesting some genuine uncertainty signal, but temperature remains the dominant factor.
 
