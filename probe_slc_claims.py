@@ -9,6 +9,7 @@ Run from the repo root:  python3 probe_slc_claims.py
 Exit 0 = every probe's measured result matched its registered prediction.
 Exit 1 = at least one prediction was wrong (that is a finding, not a crash).
 """
+import os
 import sys
 import numpy as np
 
@@ -65,10 +66,19 @@ try:
         _mon = ThermalMonitor()
     _live = _mon.read()
     _cfg0 = RuntimeConfig("defense")
+    # Amended 2026-08-17: a cooler is now physically attachable to this device,
+    # so a bare temperature is no longer self-describing. Two runs minutes apart
+    # can give opposite verdicts, both honest, with nothing in the record to
+    # tell them apart. Set SLC_HW_CONFIG and SLC_AMBIENT_C when running; an
+    # unrecorded reading is reported as unrecorded rather than silently assumed.
+    # P0's claim, threshold and verdict logic are UNCHANGED.
+    _hw = os.environ.get("SLC_HW_CONFIG", "unrecorded")
+    _amb = os.environ.get("SLC_AMBIENT_C", "unrecorded")
     record(
         "P0", "This substrate can run the defense profile (live T < temp_threshold)",
         f"live compute temperature below {_cfg0.temp_threshold} C",
-        f"live max compute zone = {_live:.2f} C vs threshold {_cfg0.temp_threshold} C",
+        f"live max compute zone = {_live:.2f} C vs threshold {_cfg0.temp_threshold} C "
+        f"[hw_config={_hw} ambient_c={_amb} zones={len(_mon.zones)}]",
         _live < _cfg0.temp_threshold,
     )
 except Exception as _e:
