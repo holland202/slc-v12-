@@ -41,21 +41,25 @@ class RuntimeConfig:
         self.max_rank = self.profile.max_rank
 
         # Real-device calibration override, if present
+        self._skip_reason = "not evaluated"
         self.calibration_applied = False
         self._apply_calibration(sector_name)
 
     def _apply_calibration(self, sector_name: str):
         if not os.path.exists(CALIBRATION_FILE):
+            self._skip_reason = "no calibration file found"
             return
         try:
             with open(CALIBRATION_FILE, "r") as f:
                 cal = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             print(f"[PARAMS-WARN] thermal_calibration.json unreadable ({e}), using sector defaults.")
+            self._skip_reason = "calibration file unreadable"
             return
 
         sector_cal = cal.get("sectors", {}).get(sector_name)
         if not sector_cal:
+            self._skip_reason = f"no calibration entry for {sector_name}"
             return
 
         # SAFETY CLAMP (fix 2026-07-19, F19 defect 2): a calibration file is
@@ -71,6 +75,7 @@ class RuntimeConfig:
             print(f"[PARAMS-WARN] calibration for '{sector_name}' "
                   f"(thresh={cal_thresh}C crit={cal_crit}C) exceeds the "
                   f"{HARDWARE_WALL}C wall or sector default; REFUSED, using defaults.")
+            self._skip_reason = "calibration refused by clamp"
             return
         self.temp_threshold = cal_thresh
         self.temp_critical = cal_crit
@@ -92,7 +97,7 @@ class RuntimeConfig:
                   f"(baseline_mean={self._calibration_meta['baseline_mean']}, "
                   f"n_sessions={self._calibration_meta['n_sessions']})")
         else:
-            print("| Source: core/params_sector.py defaults (no calibration file found)")
+            print(f"| Source: core/params_sector.py defaults ({self._skip_reason})")
         print("-" * 50)
 
 
