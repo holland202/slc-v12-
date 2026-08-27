@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """
 core/params_sector.py — Sector-Specific Thermodynamic Profiles
-Defines operational boundaries matching the 38.5°C hardware wall.
+Defines operational boundaries under a 38.5°C POLICY budget.
+
+This budget is NOT a hardware limit. Vendor trip points read from sysfs
+on this device (see diagnose_zones.py, commit 9233c76) are: first passive
+throttle 105000, then 118000/120000, hot 125000, ceiling 135000 -- all in
+millidegrees, identical across the cpu-0 and cpu-1 clusters. Measured peaks
+of 96-103°C sit below the first trip, i.e. the hardware regards that range
+as normal operation. 38.5°C is a chosen operating budget (battery wear,
+skin temperature, sustained-load headroom); its basis is not recorded here
+and it is roughly 66°C below the first vendor intervention.
 """
 from dataclasses import dataclass
 
@@ -50,7 +59,7 @@ SECTOR_PROFILES = {
     "desktop": SectorProfile(
         name="desktop",
         temp_threshold=38.0,
-        temp_critical=38.5,  # Absolute Hardware Ceiling
+        temp_critical=38.5,  # Top of the policy budget (NOT a hardware ceiling)
         max_rank=32,
         data_integrity=0.60,
         latency_target=18.0

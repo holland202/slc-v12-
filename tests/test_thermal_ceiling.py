@@ -1,4 +1,6 @@
-"""Registered guard (F19): NO sector may load a threshold above the 38.5C wall.
+"""Registered guard (F19): NO sector may load a threshold above the 38.5C
+policy budget. This budget is NOT a hardware limit -- vendor first passive
+trip on this device is 105C (see core/params_sector.py and diagnose_zones.py).
 Turns defect 2 into a permanent test. Run: python3 -m tests.test_thermal_ceiling"""
 import sys
 from core.params import RuntimeConfig
@@ -19,7 +21,7 @@ def main():
     if failed:
         print(f"FAIL: {len(failed)} sector(s) exceed the {WALL}C wall: {failed}")
         sys.exit(1)
-    print(f"PASS: all {len(SECTORS)} sectors within the {WALL}C hardware wall")
+    print(f"PASS: all {len(SECTORS)} sectors within the {WALL}C policy budget")
 
 if __name__ == "__main__":
     main()
