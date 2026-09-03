@@ -17,7 +17,7 @@ SAFETY DEFAULT: dry-run. It decides and logs but executes NOTHING until you pass
 --arm. Even armed, it only executes lines classified ALLOW, and never has an
 unconditional kill fallback. Runs fine whether or not `rish` exists.
 """
-import os, sys, time, json, signal, subprocess, shutil, hashlib, argparse
+import os, sys, time, json, signal, subprocess, shutil, hashlib, argparse, re
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -30,8 +30,14 @@ PIDFILE = STATE / "daemon.pid"
 # --- thermal: SELECTED zones only, not all 68. Edit this list once the probe
 #     shows the real type names. These substrings are matched against
 #     /sys/class/thermal/thermal_zone*/type; modem/battery deliberately excluded. ---
-THERMAL_INCLUDE_SUBSTR = ("cpu", "gpu", "soc", "apc", "cluster")
-THERMAL_EXCLUDE_SUBSTR = ("modem", "batt", "usb", "pa-", "wifi", "charger")
+# Aggregate subsystem zones only. Per-core cpu-0-X-Y sensors spike for
+# milliseconds when a core wakes — measured 2026-09-03: max over 17 of them
+# swung 59.2 -> 37.0 -> 57.3 in six seconds. Aggregates are stable.
+THERMAL_INCLUDE_SUBSTR = ("cpuss", "gpuss")
+THERMAL_EXCLUDE_SUBSTR = ("modem", "mdmss", "batt", "usb", "pa-", "wifi", "charger")
+# Reject any zone whose name is a per-core sensor: cpu-<n>-<n>-<n>
+PER_CORE_RE = re.compile(r"^cpu-\d+-\d+-\d+$")
+EMA_ALPHA = 0.3   # smoothing; 1.0 = no smoothing, lower = smoother
 
 def now(): return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -56,10 +62,21 @@ def _zone_paths():
         try: t = (z / "type").read_text().strip().lower()
         except Exception: continue
         if any(s in t for s in THERMAL_EXCLUDE_SUBSTR): continue
+        if PER_CORE_RE.match(t): continue          # per-core sensor: too twitchy
         if THERMAL_INCLUDE_SUBSTR and not any(s in t for s in THERMAL_INCLUDE_SUBSTR):
             continue
         out.append((t, z / "temp"))
     return out
+
+_ema = {"v": None}
+
+def read_temp_smoothed(zones, alpha=None):
+    """EMA-smoothed max over aggregate zones. Returns (smoothed, raw)."""
+    raw = read_temp_c(zones)
+    if raw is None: return None, None
+    a = EMA_ALPHA if alpha is None else alpha
+    _ema["v"] = raw if _ema["v"] is None else (a*raw + (1-a)*_ema["v"])
+    return round(_ema["v"], 1), raw
 
 def read_temp_c(zones):
     """Max over SELECTED zones only. Returns None if no zone is readable."""
@@ -170,13 +187,13 @@ def main():
 
     try:
         while not _stop:
-            temp = read_temp_c(zones)
+            temp, temp_raw = read_temp_smoothed(zones)
             hot = (args.thermal_ceiling is not None and baseline is not None
                    and temp is not None and (temp - baseline) > args.thermal_ceiling)
 
             proposed = read_proposed_action(args.source)
             if proposed is None:
-                record({"t": now(), "temp_c": temp, "event": "heartbeat", "hot": hot})
+                record({"t": now(), "temp_c": temp, "temp_raw": temp_raw, "event": "heartbeat", "hot": hot})
             else:
                 verdict, reason = classify(proposed)
                 result = ("SKIPPED_THERMAL", f"+{(temp-baseline):.1f}C over baseline") if hot \
@@ -187,7 +204,7 @@ def main():
                        "verdict": verdict, "reason": reason,
                        "result": result[0], "detail": result[1]}
                 record(rec)
-                log(f"{verdict} ({reason}) -> {result[0]}  temp={temp}")
+                log(f"{verdict} ({reason}) -> {result[0]}  temp={temp} (raw {temp_raw})")
             time.sleep(args.interval)
     finally:
         try: PIDFILE.unlink()
