@@ -587,3 +587,7 @@ constant until output "looks right."
 MIT
 
 *Vincit Omnia Veritas*
+
+## Related AI governance research
+
+SLC v12 explores runtime and memory-admission governance; Sovereign Veritas separately implements a permission gate for proposed AI actions and an offline recorded-decision verifier. The two projects are independent experimental prototypes, not a proven integrated safety stack. See [Sovereign Veritas — experimental AI governance and action permission gate](https://github.com/holland202/sovereign-veritas) for its current maintenance-only status, recorded failures, test contract, and explicit limitations. This cross-reference is for research navigation, not an integrated-system or independent-verification claim.
